@@ -1,0 +1,87 @@
+---
+title: "F2_SEC"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Import F2 data
+```{r}
+F2_sec <- read.csv("~/Desktop/Lab/Regulator story/test_candidate_gene/F2_SEC.csv")
+F2_sec$L_mean <- rowMeans(F2_sec[,3:5])
+F2_sec$G1_mean <- rowMeans(F2_sec[,c(16:18,20)])
+F2_sec$G2_mean <- rowMeans(F2_sec[,c(11:12,14:15)])
+F2_sec$G3_mean <- rowMeans(F2_sec[,c(6:8,10)])
+#pvalue
+F2_sec$G1_L_pval <- ttestFun(F2_sec, 3:5, c(16:18,20))
+F2_sec$G2_L_pval <- ttestFun(F2_sec, 3:5, c(11:12,14:15))
+F2_sec$G3_L_pval <- ttestFun(F2_sec, 3:5, c(6:8,10))
+
+F2_sec$G1_G2_pval <- ttestFun(F2_sec, c(11:12,14:15), c(16:18,20))
+F2_sec$G1_G3_pval <- ttestFun(F2_sec, c(6:8,10), c(16:18,20))
+
+F2_sec$G2_G3_pval <- ttestFun(F2_sec, c(6:8,10), c(11:12,14:15))
+
+#difference between groups
+F2_sec$G1_L <- F2_sec$G1_mean/F2_sec$L_mean
+F2_sec$G1_G2 <- F2_sec$G1_mean/F2_sec$G2_mean
+F2_sec$G1_G3 <- F2_sec$G1_mean/F2_sec$G3_mean
+
+F2_sec$G2_L <- F2_sec$G2_mean/F2_sec$L_mean
+F2_sec$G2_G3 <- F2_sec$G2_mean/F2_sec$G3_mean
+
+F2_sec$G3_L <- F2_sec$G3_mean/F2_sec$L_mean
+
+F2_select <- F2_sec[,c("G3_1_S6","G1_2_S5","G1_3_S19","L19","L20","G3_5_S23","G2_1_S14")]
+F2_select <- F2_sec[,c(3:5,6:8,10,11:12,14:15,16:18,20)]
+rownames(F2_select) <- F2_sec$Accession
+F2_pca_in <- t(F2_select)
+
+F2_sec$Gene <- substr(F2_sec$Accession, start = 1, stop = 14)
+F2_sec <- merge.data.frame(F2_sec,candidate_gene[,c(1,4:5)], by.x = "Gene",by.y = "Gene", all.x = T)
+F2_sec <- merge.data.frame(F2_sec,SL_GOIs[,c(1,4)], by.x = "Gene",by.y = "Gene", all.x = T)
+F2_sec <- merge.data.frame(F2_sec,complex_v4[,c(2:3)], by.x = "Gene",by.y = "Gene", all.x = T)
+F2_sec <- F2_sec[-which(duplicated(F2_sec$Accession)),]
+F2_sec_complex <- F2_sec[-which(is.na(F2_sec$complex_label)),c(4:21,41)]
+F2_sec_complex <- F2_sec_complex[order(F2_sec_complex$complex_label),]
+F2_sec_complex_matrix <- as.matrix(F2_sec_complex[grep("splicing",F2_sec_complex$complex_label), 1:18])
+heatmap(F2_sec_complex_matrix,labRow = NA,cexCol = 0.5)
+
+```
+
+#PCA
+```{r}
+  res.pca.F2 <- prcomp(F2_pca_in, scale. = T)
+  
+  
+  fviz_pca_ind(res.pca.F2,
+               col.ind = "cos2", # Color by the quality of representation
+               gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+               repel = TRUE     # Avoid text overlapping
+               )
+
+fviz_contrib(res.pca.F2, choice = "var", axes = 1, top = 10)
+pca_out <- FactoMineR::PCA(all_height_in)
+contrib_dim12 <- as.data.frame(pca_out$var$contrib[,1:2])
+contrib_dim12$Gene <- substr(rownames(contrib_dim12), start = 1, stop = 14)
+contrib_dim12$Accession <- rownames(contrib_dim12)
+contrib_dim12$Protein <- F2_sec[match(contrib_dim12$Accession, F2_sec$Accession),"Protein"]
+contrib_dim12 <- merge.data.frame(contrib_dim12, candidate_gene[,c(1,4:5)], by.x = "Gene",by.y = "Gene", all.x = T)
+contrib_dim12 <- merge.data.frame(contrib_dim12, SL_GOIs[,c(1,4)], by.x = "Gene",by.y = "Gene", all.x = T)
+contrib_dim12 <- merge.data.frame(contrib_dim12, complex_v4[,c(2:3)], by.x = "Gene",by.y = "Gene", all.x = T)
+contrib_dim12 <- contrib_dim12[-which(duplicated(contrib_dim12$Accession)),]
+
+dim1_top500 <- contrib_dim12[order(contrib_dim12$Dim.1,decreasing = T),"Gene"][1:500]
+
+dim2_top500 <- contrib_dim12[order(contrib_dim12$Dim.2,decreasing = T),"Gene"][1:500]
+
+dim1_go <- rbind(Dim1_go_bp[1:5,],Dim1_go_cc[1:5,],Dim1_go_mf[1:5,])
+dim2_go <- rbind(Dim2_go_bp[1:5,],Dim2_go_cc[1:5,],Dim2_go_mf[1:5,])
+```   
+#heatmap
+```{r}
+
+```
+

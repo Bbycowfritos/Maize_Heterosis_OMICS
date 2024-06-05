@@ -1,0 +1,46 @@
+---
+title: "Antisense"
+output: html_notebook
+---
+
+```{r}
+library(rtracklayer)
+
+#read in gff files
+
+B73_AS_sdl_R1 <- read.table("~/Desktop/BR193_genes.fpkm_tracking", header = T)
+B73_AS_sdl_R2 <- read.table("~/Desktop/BR194_genes.fpkm_tracking", header = T)
+B73_AS_sdl_R3 <- read.table("~/Desktop/BR195_genes.fpkm_tracking", header = T)
+
+B73_S_sdl_R1 <- read.table("~/Desktop/BR193_SENSE_genes.fpkm_tracking", header = T)
+B73_S_sdl_R2 <- read.table("~/Desktop/BR194_SENSE_genes.fpkm_tracking", header = T)
+B73_S_sdl_R3 <- read.table("~/Desktop/BR195_SENSE_genes.fpkm_tracking", header = T)
+
+B73_AS_sdl_R1$gene_v4 <- gsub("gene:", "", B73_AS_sdl_R1$gene_short_name)
+B73_AS_sdl_R2$gene_v4 <- gsub("gene:", "", B73_AS_sdl_R2$gene_short_name)
+B73_AS_sdl_R3$gene_v4 <- gsub("gene:", "", B73_AS_sdl_R3$gene_short_name)
+
+B73_S_sdl_R1$gene_v4 <- gsub("gene:", "", B73_S_sdl_R1$gene_short_name)
+B73_S_sdl_R2$gene_v4 <- gsub("gene:", "", B73_S_sdl_R2$gene_short_name)
+B73_S_sdl_R3$gene_v4 <- gsub("gene:", "", B73_S_sdl_R3$gene_short_name)
+
+common_id <- intersect(B73_AS_sdl_R3$gene_v4, B73_S_sdl_R3$gene_v4)
+common_id <- common_id[-which(common_id == "-")]
+
+B73_SAS_sdl_R1 <- merge.data.frame(B73_AS_sdl_R1[B73_AS_sdl_R1$gene_v4 %in% common_id,c(10,14)],B73_S_sdl_R1[B73_S_sdl_R1$gene_v4 %in% common_id,c(10,14)], by.x = "gene_v4", by.y = "gene_v4")
+
+B73_SAS_sdl_R2 <- merge.data.frame(B73_AS_sdl_R2[B73_AS_sdl_R2$gene_v4 %in% common_id,c(10,14)],B73_S_sdl_R2[B73_S_sdl_R2$gene_v4 %in% common_id,c(10,14)], by.x = "gene_v4", by.y = "gene_v4")
+
+B73_SAS_sdl_R3 <- merge.data.frame(B73_AS_sdl_R3[B73_AS_sdl_R3$gene_v4 %in% common_id,c(10,14)],B73_S_sdl_R3[B73_S_sdl_R3$gene_v4 %in% common_id,c(10,14)], by.x = "gene_v4", by.y = "gene_v4")
+
+protein_all_genotype[protein_all_genotype$Gene %in% common_id, c("mean_Seedling_B73", "Gene")]
+protein_all_genotype$mean_Seedling_B73 
+
+```
+
+
+```{r}
+merged_sense_trancript <- read.table("~/Desktop/merged_sense_transcript.bam")
+merged_sense_trancript$Gene <- substr(merged_sense_trancript$V23, start = 9, stop = 22)
+```
+

@@ -1,0 +1,2605 @@
+---
+title: "protein_polymorphic"
+author: "Bridget Bai"
+date: '2022-11-02'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+#new tissue data
+```{r}
+tissue_samples <- read.csv("~/Downloads/samples.csv")
+tissue_new <- read.csv("~/Desktop/New_tissue_011123.csv", header = T, stringsAsFactors = F)
+tissue_new_names <- data.frame(colnames(tissue_new))
+```
+
+#import data
+```{r}
+tissue_protein <- read.csv("~/Downloads/11 tissue for Peng 012920_groups.csv", header = F, stringsAsFactors = F)
+colnames(tissue_protein)[3:101] <- paste0(gsub("\\-.*","",tissue_protein[1,3:101]),"_",tissue_protein[2,3:101])
+colnames(tissue_protein)[1:2] <- tissue_protein[1,1:2]
+tissue_protein <- tissue_protein[-(1:2),]
+tissue_protein <- tissue_protein[-grep("only",tissue_protein$Accession),]
+tissue_protein <- tissue_protein[-grep("reverse",tissue_protein$Accession),]
+
+#leaf data
+seedling_mature_leaf <- read.csv("~/Desktop/Lab/Seedling_mature_leaf.csv")
+seedling_mature_leaf <- seedling_mature_leaf[,-13]
+colnames(tissue_protein) <- gsub("RadicleRoot","Radicleroot",colnames(tissue_protein))
+colnames(tissue_protein) <- gsub("SdlRoot","Sdlroot",colnames(tissue_protein))
+colnames(seedling_mature_leaf)[3:21] <- gsub(".B73.r","_B73-",colnames(seedling_mature_leaf)[3:21])
+colnames(seedling_mature_leaf)[3:21] <- gsub(".Mo17.r","_Mo17-",colnames(seedling_mature_leaf)[3:21])
+colnames(seedling_mature_leaf)[3:21] <- gsub(".BM.r","_BM-",colnames(seedling_mature_leaf)[3:21])
+tissue_protein <- merge.data.frame(tissue_protein,seedling_mature_leaf[,c(1:11,13:21)],by.x = "Accession",by.y = "Accession", all.x = T)
+
+tmt_full$Gene <- substr(tmt_full$Accession, start = 1, stop = 14)
+tmt_full_2$isoform <- substr(tmt_full_2$Accession, start = 17, stop = 20)
+tmt_full_dup <- tmt_full_2[which(duplicated(tmt_full_2$Group)), 442:453]
+tmt_full_dup[which(duplicated(tmt_full_dup$Group)),]
+tmt_full_dup_remove <- tmt_full_2[tmt_full_2$Group %in% tmt_full_dup$Group, 442:453]
+tmt_full_dup_remove <- tmt_full_dup_remove[which(duplicated(tmt_full_dup_remove$Gene)),]
+
+tmt_full_2_filtered <- tmt_full_2[-which(tmt_full_2$Accession %in% tmt_full_dup_remove$Accession),]
+
+
+
+tmt_full_2 <- tmt_full_2[-match(tmt_full_dup_remove$Accession, tmt_full_2$Accession),]
+```
+
+#count
+```{r}
+Tissues <- gsub("\\_.*","",colnames(tissue_protein)[c(13:111,113:130)])
+Tissues_index <- unique(Tissues)
+
+Tissues_count <- data.frame(unique(Tissues))
+Tissues_count$N_total_detected <- ""
+#Tissues_count$N_DE <- ""
+Tissues_count$N_B73_DE <- ""
+Tissues_count$N_Mo17_DE <- ""
+Tissues_count$N_DE_1.25_B73 <- ""
+Tissues_count$N_DE_1.25_Mo17 <- ""
+Tissues_count$N_DE_1.5_B73 <- ""
+Tissues_count$N_DE_1.5_Mo17 <- ""
+Tissues_count$N_DE_2_B73 <- ""
+Tissues_count$N_DE_2_Mo17 <- ""
+Tissues_count$N_DE_4_B73 <- ""
+Tissues_count$N_DE_4_Mo17 <- ""
+#Tissues_count$N_DE_8_B73 <- ""
+#Tissues_count$N_DE_8_Mo17 <- ""
+#Tissues_count$N_B73_SPE <- ""
+#Tissues_count$N_Mo17_SPE <- ""
+
+Expression_pool <- data.frame(tissue_protein[,c("Accession","Gene")])
+```
+
+#function count 
+```{r}
+#function
+for (i in 1:nrow(Tissues_count)){
+  
+  df_example <- tissue_protein[,c(1,grep(Tissues_count[i,1],colnames(tissue_protein)))]
+  df_example <- na.omit(df_example)
+  df_example[,2:10] <- as.numeric(unlist(df_example[,2:10]))
+  df_example <- df_example[-which(rowSums(df_example[,2:10]) == 0),]
+
+  
+  
+  df_example$B73_Mo17 <- rowMeans(df_example[,c(paste0(Tissues_count[i,1],"_",c("B73-1","B73-2","B73-3")))],na.rm = T)/rowMeans(df_example[,c(paste0(Tissues_count[i,1],"_",c("Mo17-1","Mo17-2","Mo17-3")))],na.rm = T)
+  
+  df_example$pval <- ttestFun(df_example,c(paste0(Tissues_count[i,1],"_",c("B73-1","B73-2","B73-3"))),c(paste0(Tissues_count[i,1],"_",c("Mo17-1","Mo17-2","Mo17-3"))))
+  
+  df_example$log2_B73_Mo17 <- log2(df_example$B73_Mo17)
+  df_example$DE <- "Non-DE"
+  df_example[which(df_example$pval <= 0.05),"DE"] <- "DE"
+  df_example[which(abs(df_example$log2_B73_Mo17) > log2(1.25) & df_example$pval <= 0.05),"DE"] <- "DE_1.25"
+  df_example[which(abs(df_example$log2_B73_Mo17) > log2(1.5) & df_example$pval <= 0.05),"DE"] <- "DE_1.5"
+  df_example[which(abs(df_example$log2_B73_Mo17) >1 & df_example$pval <= 0.05),"DE"] <- "DE_2"
+  df_example[which(abs(df_example$log2_B73_Mo17) >2 & df_example$pval <= 0.05),"DE"] <- "DE_4"
+  #df_example[which(abs(df_example$log2_B73_Mo17) >3 & df_example$pval <= 0.05),"DE"] <- "DE_8"
+
+  df_example$HP <- "B73"
+  df_example[which(df_example$B73_Mo17 <1),"HP"] <- "Mo17"
+
+  df_example$Category_DE <- paste0(df_example$DE,"_",df_example$HP)
+
+  #df_example$SPE <- "Non-SPE"
+  #df_example[which(df_example$log2_B73_Mo17 > log2(8) & df_example$pval <= 0.05),"SPE"] <- "SPE_B73"
+  #df_example[which(df_example$log2_B73_Mo17 < log2(0.125) & df_example$pval <= 0.05),"SPE"] <- "SPE_Mo17"
+
+
+#4n-2:4n+1
+  Expression_pool <- merge.data.frame(Expression_pool, df_example[,c("Accession","B73_Mo17","pval","Category_DE")],by.x = "Accession",by.y = "Accession", all.x = T)
+  #Expression_pool <- Expression_pool[!duplicated(Expression_pool$Accession),]
+  #Expression_pool[match(df_example$Accession,Expression_pool$Accession),(4*i-2):(4*i+1)] <- df_example[match(Expression_pool$Accession,df_example$Accession),c("B73_Mo17","pval","Category_DE","SPE")]
+
+colnames(Expression_pool)[(3*i):(3*i+2)] <- c(paste0(Tissues_count[i,1], "_", colnames(Expression_pool)[(3*i):(3*i+2)]))
+  
+  #c(paste0(Tissues_count[i,1], "_", "B73_Mo17"),paste0(Tissues_count[i,1], "_", "pval"),paste0(Tissues_count[i,1], "_", "Category_DE"),paste0(Tissues_count[i,1], "_", "SPE"))
+
+
+Tissues_count[i,"N_total_detected"] <- nrow(df_example)
+Tissues_count[i,"N_B73_DE"] <- nrow(df_example[which(df_example$HP == "B73"),])-nrow(df_example[which(df_example$HP == "B73" & df_example$DE == "Non-DE"),])
+Tissues_count[i,"N_Mo17_DE"] <- nrow(df_example[which(df_example$HP == "Mo17"),])-nrow(df_example[which(df_example$HP == "Mo17" & df_example$DE == "Non-DE"),])
+
+Tissues_count[i,"N_DE_1.25_B73"] <- nrow(df_example[which(df_example$Category_DE == "DE_1.25_B73"),])
+Tissues_count[i,"N_DE_1.25_Mo17"] <- nrow(df_example[which(df_example$Category_DE == "DE_1.25_Mo17"),])
+Tissues_count[i,"N_DE_1.5_B73"] <- nrow(df_example[which(df_example$Category_DE == "DE_1.5_B73"),])
+Tissues_count[i,"N_DE_1.5_Mo17"] <- nrow(df_example[which(df_example$Category_DE == "DE_1.5_Mo17"),])
+Tissues_count[i,"N_DE_2_B73"] <- nrow(df_example[which(df_example$Category_DE == "DE_2_B73"),])
+Tissues_count[i,"N_DE_2_Mo17"] <- nrow(df_example[which(df_example$Category_DE == "DE_2_Mo17"),])
+Tissues_count[i,"N_DE_4_B73"] <- nrow(df_example[which(df_example$Category_DE == "DE_4_B73"),])
+Tissues_count[i,"N_DE_4_Mo17"] <- nrow(df_example[which(df_example$Category_DE == "DE_4_Mo17"),])
+#Tissues_count[i,"N_DE_8_B73"] <- nrow(df_example_nonzero[which(df_example_nonzero$Category_DE == "DE_8_B73"),])
+#Tissues_count[i,"N_DE_8_Mo17"] <- nrow(df_example_nonzero[which(df_example_nonzero$Category_DE == "DE_8_Mo17"),])
+
+#Tissues_count[i,"N_B73_SPE"] <- nrow(df_example[which(df_example$SPE == "SPE_B73"),])
+#Tissues_count[i,"N_Mo17_SPE"] <- nrow(df_example[which(df_example$SPE == "SPE_Mo17"),])
+
+}
+```
+
+#add leaf data
+```{r}
+seedling_mature_leaf$Seedlingleaf_B73_Mo17 <- rowMeans(seedling_mature_leaf[,c("SeedlingLeaf.B73.r1","SeedlingLeaf.B73.r2","SeedlingLeaf.B73.r3")],na.rm = T)/rowMeans(seedling_mature_leaf[,c("SeedlingLeaf.Mo17.r1","SeedlingLeaf.Mo17.r2","SeedlingLeaf.Mo17.r3")],na.rm = T)
+
+seedling_mature_leaf$l2_seedling_B73Mo17 <- log2(seedling_mature_leaf$Seedlingleaf_B73_Mo17)
+
+seedling_mature_leaf$Seedlingleaf_pval <- ttestFun(seedling_mature_leaf,c("SeedlingLeaf.B73.r1","SeedlingLeaf.B73.r2","SeedlingLeaf.B73.r3"),c("SeedlingLeaf.Mo17.r1","SeedlingLeaf.Mo17.r2","SeedlingLeaf.Mo17.r3"))
+
+seedling_mature_leaf$Matureleaf_B73_Mo17 <- rowMeans(seedling_mature_leaf[,c("MatureLeaf.B73.r1","MatureLeaf.B73.r2","MatureLeaf.B73.r3")],na.rm = T)/rowMeans(seedling_mature_leaf[,c("MatureLeaf.Mo17.r1","MatureLeaf.Mo17.r2","MatureLeaf.Mo17.r3")],na.rm = T)
+
+seedling_mature_leaf$l2_mature_B73Mo17 <- log2(seedling_mature_leaf$Matureleaf_B73_Mo17)
+seedling_mature_leaf$Matureleaf_pval <- ttestFun(seedling_mature_leaf,c("MatureLeaf.B73.r1","MatureLeaf.B73.r2","MatureLeaf.B73.r3"),c("MatureLeaf.Mo17.r1","MatureLeaf.Mo17.r2","MatureLeaf.Mo17.r3"))
+
+
+#assign
+seedling_mature_leaf$seedling_DE <- "Non-DE"
+seedling_mature_leaf[which(abs(seedling_mature_leaf$Seedlingleaf_B73_Mo17 -1) >0.3 & seedling_mature_leaf$Seedlingleaf_pval <= 0.05),"seedling_DE"] <- "DE"
+  seedling_mature_leaf[which(abs(seedling_mature_leaf$l2_seedling_B73Mo17) >1 & seedling_mature_leaf$Seedlingleaf_pval <= 0.05),"seedling_DE"] <- "DE_2"
+  seedling_mature_leaf[which(abs(seedling_mature_leaf$l2_seedling_B73Mo17) >2 & seedling_mature_leaf$Seedlingleaf_pval <= 0.05),"seedling_DE"] <- "DE_4"
+  #seedling_mature_leaf[which(abs(seedling_mature_leaf$l2_seedling_B73Mo17) >3 & seedling_mature_leaf$Seedlingleaf_pval <= 0.05),"seedling_DE"] <- "DE_8"
+  
+seedling_mature_leaf$seedling_HP <- "B73"
+seedling_mature_leaf[which(seedling_mature_leaf$Seedlingleaf_B73_Mo17 <1), "seedling_HP"] <- "Mo17"
+
+seedling_mature_leaf$SeedlingLeaf_Category_DE <- paste0(seedling_mature_leaf$seedling_DE,"_",seedling_mature_leaf$seedling_HP)
+
+seedling_mature_leaf$Seedlingleaf_SPE <- "Non-SPE"
+ seedling_mature_leaf[which(seedling_mature_leaf$l2_seedling_B73Mo17 > log2(8) & seedling_mature_leaf$Seedlingleaf_pval <= 0.05),"Seedlingleaf_SPE"] <- "SPE_B73"
+  seedling_mature_leaf[which(seedling_mature_leaf$l2_seedling_B73Mo17 < log2(0.125) & seedling_mature_leaf$Seedlingleaf_pval <= 0.05),"Seedlingleaf_SPE"] <- "SPE_Mo17"
+
+
+seedling_mature_leaf$mature_DE <- "Non-DE"
+seedling_mature_leaf[which(abs(seedling_mature_leaf$Matureleaf_B73_Mo17 -1) >0.3 & seedling_mature_leaf$Matureleaf_pval <= 0.05),"mature_DE"] <- "DE"
+  seedling_mature_leaf[which(abs(seedling_mature_leaf$l2_mature_B73Mo17) >1 & seedling_mature_leaf$Matureleaf_pval <= 0.05),"mature_DE"] <- "DE_2"
+  seedling_mature_leaf[which(abs(seedling_mature_leaf$l2_mature_B73Mo17) >2 & seedling_mature_leaf$Matureleaf_pval <= 0.05),"mature_DE"] <- "DE_4"
+  #seedling_mature_leaf[which(abs(seedling_mature_leaf$l2_mature_B73Mo17) >3 & seedling_mature_leaf$Matureleaf_pval <= 0.05),"mature_DE"] <- "DE_8"
+  
+seedling_mature_leaf$mature_HP <- "B73"
+seedling_mature_leaf[which(seedling_mature_leaf$Matureleaf_B73_Mo17 <1), "mature_HP"] <- "Mo17"
+seedling_mature_leaf$MatureLeaf_Category_DE <- paste0(seedling_mature_leaf$mature_DE,"_",seedling_mature_leaf$mature_HP)
+
+seedling_mature_leaf$Matureleaf_SPE <- "Non-SPE"
+ seedling_mature_leaf[which(seedling_mature_leaf$l2_mature_B73Mo17 > log2(8) & seedling_mature_leaf$Matureleaf_pval <= 0.05),"Matureleaf_SPE"] <- "SPE_B73"
+  seedling_mature_leaf[which(seedling_mature_leaf$l2_mature_B73Mo17 < log2(0.125) & seedling_mature_leaf$Matureleaf_pval <= 0.05),"Matureleaf_SPE"] <- "SPE_Mo17"
+
+
+
+
+Expression_pool <- merge.data.frame(Expression_pool,seedling_mature_leaf[,c(1:2,23,25:26,28,31:32,35:36)],by.x = "Accession",by.y = "Accession", all.x = T)
+Expression_pool[which(is.na(Expression_pool$Seedlingleaf_B73_Mo17)),"Seedlingleaf_B73_Mo17"] <- "NaN"
+Expression_pool[which(is.na(Expression_pool$Seedlingleaf_pval)),"Seedlingleaf_pval"] <- "NaN"
+Expression_pool[which(is.na(Expression_pool$Matureleaf_B73_Mo17)),"Matureleaf_B73_Mo17"] <- "NaN"
+Expression_pool[which(is.na(Expression_pool$Matureleaf_pval)),"Matureleaf_pval"] <- "NaN"
+Expression_pool[which(Expression_pool$SeedlingLeaf_Category_DE == "NaN"),"SeedlingLeaf_Category_DE"] <- "Non-DE_B73"
+Expression_pool[which(Expression_pool$MatureLeaf_Category_DE == "NaN"),"MatureLeaf_Category_DE"] <- "Non-DE_B73"
+Expression_pool[which(Expression_pool$Seedlingleaf_SPE == "Non-SPE_B73"),"Seedlingleaf_SPE"] <- "Non-SPE"
+Expression_pool[which(Expression_pool$Matureleaf_SPE == "Non-SPE_B73"),"Matureleaf_SPE"] <- "Non-SPE"
+
+Seedling_nonzero <- seedling_mature_leaf[-which(rowSums(seedling_mature_leaf[,3:11]) == 0),]
+Mature_nonzero <- seedling_mature_leaf[-which(rowSums(seedling_mature_leaf[,13:21]) == 0),]
+Seedling_nonzero <- Seedling_nonzero[-grep("only",Seedling_nonzero$Accession),]
+Mature_nonzero <- Mature_nonzero[-grep("only",Mature_nonzero$Accession),]
+Seedling_nonzero <- Seedling_nonzero[-grep("reverse",Seedling_nonzero$Accession),]
+Mature_nonzero <- Mature_nonzero[-grep("reverse",Mature_nonzero$Accession),]
+
+Tissues_count[12,] <- ""
+Tissues_count[12,1] <- "SeedlingLeaf"
+
+Tissues_count[12,"N_total_detected"] <- nrow(Seedling_nonzero)
+#Tissues_count[12,"N_DE"] <- nrow(Seedling_nonzero[which(Seedling_nonzero$seedling_DE == "DE"),])
+
+Tissues_count[12,"N_B73_DE"] <- nrow(Seedling_nonzero[which(Seedling_nonzero$seedling_HP == "B73"),])-nrow(Seedling_nonzero[which(Seedling_nonzero$seedling_HP == "B73" & Seedling_nonzero$seedling_DE == "Non-DE"),])
+Tissues_count[12,"N_Mo17_DE"] <- nrow(Seedling_nonzero[which(Seedling_nonzero$seedling_HP == "Mo17"),])-nrow(Seedling_nonzero[which(Seedling_nonzero$seedling_HP == "Mo17" & Seedling_nonzero$seedling_DE == "Non-DE"),])
+
+Tissues_count[12,"N_DE_2_B73"] <- nrow(Seedling_nonzero[which(Seedling_nonzero$SeedlingLeaf_Category_DE == "DE_2_B73"),])
+Tissues_count[12,"N_DE_2_Mo17"] <- nrow(Seedling_nonzero[which(Seedling_nonzero$SeedlingLeaf_Category_DE == "DE_2_Mo17"),])
+Tissues_count[12,"N_DE_4_B73"] <- nrow(Seedling_nonzero[which(Seedling_nonzero$SeedlingLeaf_Category_DE == "DE_4_B73"),])
+Tissues_count[12,"N_DE_4_Mo17"] <- nrow(Seedling_nonzero[which(Seedling_nonzero$SeedlingLeaf_Category_DE == "DE_4_Mo17"),])
+#Tissues_count[12,"N_DE_8_B73"] <- nrow(Seedling_nonzero[which(Seedling_nonzero$SeedlingLeaf_Category_DE == "DE_8_B73"),])
+#Tissues_count[12,"N_DE_8_Mo17"] <- nrow(Seedling_nonzero[which(Seedling_nonzero$SeedlingLeaf_Category_DE == "DE_8_Mo17"),])
+
+Tissues_count[12,"N_B73_SPE"] <- nrow(Seedling_nonzero[which(Seedling_nonzero$Seedlingleaf_SPE == "SPE_B73"),])
+Tissues_count[12,"N_Mo17_SPE"] <- nrow(Seedling_nonzero[which(Seedling_nonzero$Seedlingleaf_SPE == "SPE_Mo17"),])
+
+Tissues_count[13,] <- ""
+Tissues_count[13,1] <- "MatureLeaf"
+
+Tissues_count[13,"N_total_detected"] <- nrow(Mature_nonzero)
+#Tissues_count[13,"N_DE"] <- nrow(Mature_nonzero[which(Mature_nonzero$mature_DE == "DE"),])
+
+Tissues_count[13,"N_B73_DE"] <- nrow(Mature_nonzero[which(Mature_nonzero$mature_HP == "B73"),])-nrow(Mature_nonzero[which(Mature_nonzero$mature_HP == "B73" & Mature_nonzero$mature_DE == "Non-DE"),])
+
+Tissues_count[13,"N_Mo17_DE"] <- nrow(Mature_nonzero[which(Mature_nonzero$mature_HP == "Mo17"),])-nrow(Mature_nonzero[which(Mature_nonzero$mature_HP == "Mo17" & Mature_nonzero$mature_DE == "Non-DE"),])
+
+Tissues_count[13,"N_DE_2_B73"] <- nrow(Mature_nonzero[which(Mature_nonzero$MatureLeaf_Category_DE == "DE_2_B73"),])
+Tissues_count[13,"N_DE_2_Mo17"] <- nrow(Mature_nonzero[which(Mature_nonzero$MatureLeaf_Category_DE == "DE_2_Mo17"),])
+Tissues_count[13,"N_DE_4_B73"] <- nrow(Mature_nonzero[which(Mature_nonzero$MatureLeaf_Category_DE == "DE_4_B73"),])
+Tissues_count[13,"N_DE_4_Mo17"] <- nrow(Mature_nonzero[which(Mature_nonzero$MatureLeaf_Category_DE == "DE_4_Mo17"),])
+#Tissues_count[13,"N_DE_8_B73"] <- nrow(Mature_nonzero[which(Mature_nonzero$MatureLeaf_Category_DE == "DE_8_B73"),])
+#Tissues_count[13,"N_DE_8_Mo17"] <- nrow(Mature_nonzero[which(Mature_nonzero$MatureLeaf_Category_DE == "DE_8_Mo17"),])
+
+Tissues_count[13,"N_B73_SPE"] <- nrow(Mature_nonzero[which(Mature_nonzero$Matureleaf_SPE == "SPE_B73"),])
+Tissues_count[13,"N_Mo17_SPE"] <- nrow(Mature_nonzero[which(Mature_nonzero$Matureleaf_SPE == "SPE_Mo17"),])
+```
+
+#scatterplot
+```{r}
+Tissues_plot <- cbind(row = Tissues_count[,1], stack(Tissues_count[,3:12]))
+Tissues_plot <- Tissues_plot[order(Tissues_plot$row),]
+Tissues_plot$HP <- rep(c("B73","Mo17"),nrow(Tissues_plot)/2)
+Tissues_plot <- Tissues_plot[order(Tissues_plot$ind),]
+Tissues_plot$Type <- c(rep("DE(All)",26), rep("DE(1.25+)",26),rep("DE(1.5+)",26), rep("DE(2+)",26),rep("DE(4+)",26))
+Tissues_plot[Tissues_plot$HP == "B73","HP"] <- "B73 higher"
+Tissues_plot[Tissues_plot$HP == "Mo17","HP"] <- "Mo17 higher"
+
+ggplot(Tissues_plot, aes(row,as.numeric(values), color = HP, shape = Type)) + geom_point(size = 1.6,stat = "identity",position = position_dodge(width = 0.5))+
+  scale_shape_manual(values = c("DE(All)" = 15,"DE(1.25+)"= 2, "DE(1.5+)" = 1, "DE(2+)" = 5,"DE(4+)" = 6)) +
+  ylab("Number of proteins") +
+  xlab("") +
+theme_bw()+
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5))+
+theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+  theme(legend.title = element_blank(), legend.position = "top",legend.spacing.x = unit(0.02,"cm"))+
+  geom_vline(xintercept = c(1.5,2.5,3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5,11.5,12.5), linetype = "dashed",color = "grey")
+
+  #scale_y_continuous(breaks = c(1000,2000,3000,4000,5000))
+
+
+ 
+
+```
+
+#number of tissue DE
+```{r}
+tissue_N_expression <- Expression_pool[,c("Accession","Gene")]
+tissue_N_expression$count_NA <- rowSums(Expression_pool[,c(2,6,10,14,18,22,26,30,34,38,42,47,49)] == "NaN")
+tissue_N_expression$count_expression <- 13- (tissue_N_expression$count_NA)
+tissue_N_expression$count_nonDE <- rowSums(Expression_pool[,grep("Category_DE",colnames(Expression_pool))] == "Non-DE_B73"|Expression_pool[,grep("Category_DE",colnames(Expression_pool))] == "Non-DE_Mo17")
+tissue_N_expression$count_DE <- 13- (tissue_N_expression$count_nonDE)
+tissue_N_expression$count_DE_only <- tissue_N_expression$count_DE - tissue_N_expression$count_SPE
+
+#DE
+tissue_N_plot <- data.frame(tissue_N_expression %>% group_by(count_expression,count_DE_only) %>%
+  tally())
+tissue_expression_count <- data.frame(tissue_N_expression %>% group_by(count_expression) %>% summarise(n()))
+
+tissue_N_plot$n_expressed <- tissue_expression_count[match(tissue_N_plot$count_expression,tissue_expression_count$count_expression),"n_expressed"]
+tissue_N_plot$percent_gene <- tissue_N_plot$n/tissue_N_plot$n_expressed
+tissue_N_plot$percent_DE <- tissue_N_plot$count_DE_only/tissue_N_plot$count_expression
+tissue_N_plot$percent_gene <- as.numeric(tissue_N_plot$percent_gene)
+tissue_N_plot$count_tissue_gene <- paste0(tissue_N_plot$count_expression, " (", tissue_N_plot$n_expressed,")")
+
+palette_custom <- c("gray",viridis::cividis(n = 60))
+
+ggplot(tissue_N_plot[2:105,], aes(y = percent_gene, x =count_expression, fill = percent_DE)) + 
+  geom_bar(position = "stack", stat = "identity") + 
+  #scale_color_manual(values = palette_custom)+
+  scale_fill_gradientn(colours = c("gray",viridis(n = 60,direction = -1,option = "D")), guide = "legend") + 
+  xlab("Number Expressed Tissues") + 
+                      ylab("Proportion Proteins") + 
+    scale_x_continuous(breaks = c(1:13),expand = c(0,0), labels = c(unique(tissue_N_plot$count_tissue_gene)[2:14]))+
+  scale_y_continuous(expand = c(0,0))+
+                      coord_flip() + 
+  theme_bw()+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),)+
+                      theme(legend.position = "top") +
+  theme(legend.title = element_blank()) +
+  ggtitle("Proportion Tissues DE")+
+  theme(plot.title = element_text(hjust = 0.5,vjust = -1,size = 11))+
+  theme(axis.text.y = element_text(size = 8))
+  
+
+#SPE
+tissue_N_expression$count_nonSPE <- rowSums(Expression_pool[,grep("SPE",colnames(Expression_pool))] == "Non-SPE")
+tissue_N_expression$count_SPE <- 13- (tissue_N_expression$count_nonSPE)
+SPE_tissue_direction <- data.frame(tissue_N_expression %>% group_by(count_expression, count_SPE) %>% tally())
+SPE_tissue_direction$n_expressed <- tissue_expression_count[match(SPE_tissue_direction$count_expression,tissue_expression_count$count_expression),"n_expressed"]
+SPE_tissue_direction$percent_gene <- SPE_tissue_direction$n/SPE_tissue_direction$n_expressed
+SPE_tissue_direction$percent_SPE <- SPE_tissue_direction$count_SPE/SPE_tissue_direction$count_expression
+SPE_tissue_direction$count_tissue_gene <- paste0(SPE_tissue_direction$count_expression, " (", SPE_tissue_direction$n_expressed,")")
+SPE_tissue_direction$percent_gene <- as.numeric(SPE_tissue_direction$percent_gene)
+
+```
+
+#number of SPE also polymorphic
+```{r}
+polymorphic <- Expression_pool[grep("only",Expression_pool$Accession),]
+Tissues_count[,14] <- ""
+Tissues_count[,15] <- ""
+colnames(Tissues_count)[14:15] <- c("N_B73only_SPE","N_Mo17only_SPE")
+
+for (i in 2:ncol(polymorphic)){
+  Tissues_count[i-1,14] <- nrow(polymorphic[grep("SPE_B73",polymorphic[,i]),])
+  Tissues_count[i-1,15] <- nrow(polymorphic[grep("SPE_Mo17",polymorphic[,i]),])
+}
+
+Tissues_count$percent_polymorphic_SPE_B73 <- as.numeric(Tissues_count$N_B73only_SPE)/as.numeric(Tissues_count$N_B73_SPE)
+Tissues_count$percent_polymorphic_SPE_Mo17 <- as.numeric(Tissues_count$N_Mo17only_SPE)/as.numeric(Tissues_count$N_Mo17_SPE)
+
+
+polymorphic_count_plot <- cbind(row = Tissues_count[,1], stack(Tissues_count[,16:17]))
+polymorphic_count_plot$genotype <- gsub("percent_polymorphic_SPE_","",polymorphic_count_plot$ind)
+ggplot(polymorphic_count_plot,aes(row,as.numeric(values), fill = genotype))+geom_bar(stat = "identity",position = "dodge") + theme(axis.text.x = element_text(angle = 45,vjust = 0.5)) +xlab("") +ylab("Ratio (polymorphic/SPE)")+
+  theme(legend.title = element_blank())
+
+```
+#Number DE Tissues with directionality 
+```{r}
+DE_tissue_direction <- Expression_pool[,c(1,grep("Category",colnames(Expression_pool)))]
+DE_tissue_direction[is.na(DE_tissue_direction)] <- "Notdetected"
+
+DE_tissue_direction$count_nonDE <- rowSums(DE_tissue_direction[,2:14] == "Non-DE_B73"|DE_tissue_direction[,2:14] == "Non-DE_Mo17")
+DE_tissue_direction$count_notdetected <- rowSums(DE_tissue_direction[,2:14] == "Notdetected")
+DE_tissue_direction$count_DE <- 13-(rowSums(DE_tissue_direction[,c("count_nonDE","count_notdetected")]))
+DE_tissue_direction <- DE_tissue_direction[-which(DE_tissue_direction$count_DE ==0),]
+
+DE_tissue_direction$count_DE_low <- rowSums(DE_tissue_direction[,2:14] == "DE_B73"|DE_tissue_direction[,2:14] == "DE_Mo17")
+
+DE_tissue_direction$count_DE_high_percentage <- 1-(DE_tissue_direction$count_DE_low/DE_tissue_direction$count_DE)
+
+DE_tissue_direction$count_DE_B73 <- rowSums(DE_tissue_direction[,2:14] == "DE_B73"|DE_tissue_direction[,2:14] == "DE_1.25_B73"|DE_tissue_direction[,2:14] == "DE_1.5_B73"|DE_tissue_direction[,2:14] == "DE_2_B73"|DE_tissue_direction[,2:14] == "DE_4_B73")
+DE_tissue_direction$count_DE_Mo17 <- rowSums(DE_tissue_direction[,2:14] == "DE_Mo17"|DE_tissue_direction[,2:14] == "DE_1.25_Mo17"|DE_tissue_direction[,2:14] == "DE_1.5_Mo17"|DE_tissue_direction[,2:14] == "DE_2_Mo17"|DE_tissue_direction[,2:14] == "DE_4_Mo17")
+
+DE_tissue_direction$count_DE_high <- DE_tissue_direction$count_DE - DE_tissue_direction$count_DE_low
+
+DE_tissue_direction$count_DE_high_B73 <- rowSums(DE_tissue_direction[,2:14] == "DE_1.25_B73"|DE_tissue_direction[,2:14] == "DE_1.5_B73"|DE_tissue_direction[,2:14] == "DE_2_B73"|DE_tissue_direction[,2:14] == "DE_4_B73")
+
+DE_tissue_direction$count_DE_high_Mo17 <- rowSums(DE_tissue_direction[,2:14] == "DE_1.25_Mo17"|DE_tissue_direction[,2:14] == "DE_1.5_Mo17"|DE_tissue_direction[,2:14] == "DE_2_Mo17"|DE_tissue_direction[,2:14] == "DE_4_Mo17")
+
+sum(rowSums(DE_tissue_direction[,c("count_DE_B73","count_DE_Mo17")]) == DE_tissue_direction$count_DE)
+
+
+
+#DE_tissue_direction$count_nonSPE <- rowSums(DE_tissue_direction[,15:27] == "Non-SPE")
+#DE_tissue_direction$count_SPE <- 13-(DE_tissue_direction$count_nonSPE)
+#DE_tissue_direction$count_SPE_B73 <- rowSums(DE_tissue_direction[,15:27] == "SPE_B73")
+#DE_tissue_direction$count_SPE_Mo17 <- rowSums(DE_tissue_direction[,15:27] == "SPE_Mo17")
+
+#DE_tissue_direction$count_DE_only <- DE_tissue_direction$count_DE - DE_tissue_direction$count_SPE
+#DE_tissue_direction$count_DE_only_B73 <- DE_tissue_direction$count_DE_B73 - DE_tissue_direction$count_SPE_B73
+#DE_tissue_direction$count_DE_only_Mo17 <- DE_tissue_direction$count_DE_Mo17 - DE_tissue_direction$count_SPE_Mo17
+
+DE_tissue_direction$direction_DE_high <- ""
+#DE_tissue_direction$direction_SPE <- ""
+
+for (i in 1:nrow(DE_tissue_direction)){
+  if (DE_tissue_direction[i,"count_DE_high"] == DE_tissue_direction[i,"count_DE_high_B73"]){
+    DE_tissue_direction[i,"direction_DE_high"] <- "consis.DE_B"
+  } else if (DE_tissue_direction[i,"count_DE_high"] == DE_tissue_direction[i,"count_DE_high_Mo17"]) {
+    DE_tissue_direction[i,"direction_DE_high"] <- "consis.DE_M"
+  }else {
+    DE_tissue_direction[i,"direction_DE_high"] <- "mix of DE_B/DE_M"
+  }
+}
+
+#for (i in 1:nrow(DE_tissue_direction)){
+  if (DE_tissue_direction[i,"count_SPE"] == DE_tissue_direction[i,"count_SPE_B73"]){
+    DE_tissue_direction[i,"direction_SPE"] <- "consis.SPE_B"
+  } else if (DE_tissue_direction[i,"count_SPE"] == DE_tissue_direction[i,"count_SPE_Mo17"]) {
+    DE_tissue_direction[i,"direction_SPE"] <- "consis.SPE_M"
+  }else {
+    DE_tissue_direction[i,"direction_SPE"] <- "mix of SPE_B/SPE_M"
+  }
+}
+
+barplot_DE <- data.frame(DE_tissue_direction %>% group_by(count_DE,direction_DE) %>%
+
+tally())
+
+barplot_DE_high <- data.frame(DE_tissue_direction %>% group_by(count_DE_high,direction_DE_high) %>%
+
+tally())
+barplot_DE_high <- barplot_DE_high[-which(barplot_DE_high$count_DE_high == 0),]
+
+barplot_DE_low <- data.frame(DE_tissue_direction %>% group_by(count_DE,count_DE_high_percentage,direction_DE) %>%
+
+tally())
+
+ggplot(barplot_DE_high, aes(fill = direction_DE_high, y = n, x = count_DE_high)) +geom_bar(position = "stack", stat = "identity")+
+  #scale_fill_brewer(palette = "",)+
+  scale_fill_manual(values = c("consis.DE_B" = "#0072B2","consis.DE_M" = "#D55E00","mix of DE_B/DE_M" = "darkgray"))+
+  xlab("Number DE Tissues") +
+  ylab("Number Proteins")+
+  theme_gray()+
+  theme(legend.title = element_blank()) 
++
+  scale_x_continuous(breaks = c(0,5,10))
+```
+
+#alluvial plot
+```{r}
+tissues_DE_count <- data.frame(DE_tissue_direction %>% group_by(count_DE) %>% tally())
+barplot_DE_low$percent_protein <- barplot_DE_low$n/barplot_DE_low$n_total_DE
+barplot_DE_low$n_total_DE <- tissues_DE_count[match(barplot_DE_low$count_DE,tissues_DE_count$count_DE),"n"]
+barplot_DE_low$percent_low_DE <- barplot_DE_low$count_DE_low/barplot_DE_low$count_DE
+barplot_DE_low$count_DE_high_percentage <- as.numeric(barplot_DE_low$count_DE_high_percentage)
+barplot_DE_low <- barplot_DE_low[which(barplot_DE_low$count_DE_high_percentage == 0 |barplot_DE_low$count_DE_high_percentage == 1),]
+barplot_DE_low$category <- ""
+barplot_DE_low[barplot_DE_low$count_DE_high_percentage == 0, "category"] <- "None"
+barplot_DE_low[barplot_DE_low$count_DE_high_percentage == 1, "category"] <- "All"
+
+palette_custom <- c("gray",viridis::cividis(n = 60))
+
+ggplot(barplot_DE_low, aes(y = percent_protein, x =count_DE, fill = percent_low_DE)) + 
+  geom_bar(position = "stack", stat = "identity") + 
+  #scale_color_manual(values = palette_custom)+
+  scale_fill_gradientn(colours = c("gray",viridis(n = 60,direction = -1,option = "D")), guide = "legend") + 
+  xlab("Number DE Tissues") + 
+                      ylab("Proportion Proteins") + 
+    scale_x_continuous(breaks = c(1:13),expand = c(0,0), labels = c(unique(barplot_DE_low$count_DE)))+
+  scale_y_continuous(expand = c(0,0))+
+                      coord_flip() + 
+  theme_bw()+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+                      theme(legend.position = "top") +
+  theme(legend.title = element_blank()) +
+  ggtitle("Proportion Tissues with below 25% DE")+
+  theme(plot.title = element_text(hjust = 0.5,vjust = -1,size = 11))+
+  theme(axis.text.y = element_text(size = 8))
+
+ggplot(barplot_DE_low[47:70,], aes(axis1 = count_DE, axis2 = category, axis3 = direction_DE,y = n))+
+  scale_x_discrete(limits = c("Number DE tissue","Percentage tissue with DE > 25%","DE direction"), expand = c(0.08,0.1))+
+  xlab("")+
+  ylab("Number proteins")+
+  geom_alluvium(aes(fill = tissue),width = 0.2,alpha = 0.8)+
+  geom_stratum(width = 0.2)+
+  geom_text(stat = "stratum", aes(label = stat(stratum)), size = 2)+
+  theme_minimal()+
+  theme(legend.position = "top")+
+  theme(axis.text.x = element_text(color = "black", size= 9))+
+  labs(fill = "Tissue specificity of HP")
+
+
+
+```
+
+#whisker plot for N_tissue and %high DE
+```{r}
+whisker_DE <- DE_tissue_direction[,c("count_DE","count_DE_high_percentage")]
+whisker_DE$count <- tissues_DE_count[match(whisker_DE$count_DE,tissues_DE_count$count_DE),"n"]
+whisker_DE$count_DE <- factor(whisker_DE$count_DE, levels = c(1,2,3,4,5,6,7,8,9,10,11,12,13))
+ggplot(whisker_DE,aes(count_DE,count_DE_high_percentage))+ geom_violin() +
+  scale_x_discrete(label = c(paste0(tissues_DE_count$count_DE,"(",tissues_DE_count$n,")")))+
+  ylab("Percentage tissues with high DE ")+
+  xlab("Number DE tissues")+
+  theme_classic()+
+  theme(axis.text.x = element_text(colour = "black",size = 8))
+```
+
+#Pull out DE in 9 or more with consistent HP
+```{r}
+tissue_N_expression$percent_DE <- tissue_N_expression$count_DE_only/tissue_N_expression$count_expression
+DE_9to13 <- tissue_N_expression[tissue_N_expression$count_expression %in% c(10:13),c("Accession","Gene", "count_DE_only","percent_DE")]
+DE_9to13 <- DE_9to13[-which(DE_9to13$percent_DE < 0.9),]
+DE_9to13$direction_DE <- DE_tissue_direction[match(DE_9to13$Accession,DE_tissue_direction$Accession),"direction_DE"]
+DE_9to13 <- DE_9to13[-grep("mix",DE_9to13$direction_DE),]
+DE_9to13 <- DE_9to13[order(DE_9to13$count_DE_only,decreasing = T),]
+DE_9to13[1:13,c("Gene","percent_DE","direction_DE")]
+```
+
+#generate tissue full dataset
+```{r}
+##remove after _
+#gsub("\\_(.*)","",colnames(Tissue_full_HMP))
+tmt_full <- read.delim("~/Downloads/Z-combine-protein-TMT10.2022-11-30-16-9-12.tsv", header = T, stringsAsFactors = F)
+
+tmt_full <- tmt_full[,-grep("total",colnames(tmt_full))]
+tmt_full <- tmt_full[,-grep("RIL",colnames(tmt_full))]
+tmt_full <- tmt_full[,-grep("6Hybrid",colnames(tmt_full))]
+tmt_full <- tmt_full[,-grep("ACS",colnames(tmt_full))]
+tmt_full <- tmt_full[,-grep("DayNight",colnames(tmt_full))]
+tmt_full <- tmt_full[,-grep("Redox",colnames(tmt_full))]
+tmt_full <- tmt_full[,-grep("MxB",colnames(tmt_full))]
+tmt_full <- tmt_full[,-(532:540)]
+tmt_full <- tmt_full[-grep("only",tmt_full$Accession),]
+tmt_full <- tmt_full[-grep("reverse",tmt_full$Accession),]
+
+
+header_list <- gsub("\\TMT.*","",colnames(tmt_full)[1:441])
+header_list <- gsub(".*PGRP2016","",header_list)
+header_list <- gsub(".*2019","",header_list)
+header_list <- gsub("to",'\\.',header_list)
+header_list_cut <- data.frame(header_list)
+header_list_cut$trimmed <- ""
+
+
+for (i in 1:nrow(header_list_cut)){
+  
+  header_list_cut[i,"trimmed"] <- substr(header_list_cut[i,"header_list"],start = gregexec('\\.',header_list_cut[i,"header_list"])[[1]][3]+1, stop = gregexec('\\.',header_list_cut[i,"header_list"])[[1]][4]-1)
+}
+
+Tissues_num <- data.frame(header_list_cut %>% group_by(Tissue) %>% tally)
+Tissues_num[Tissues_num$Tissue == "Root","Tissue"] <- "ROOT"
+Tissues_num[Tissues_num$Tissue == "Tassel","Tissue"] <- "TASSEL"
+
+colnames(tmt_full)[190:234] <- gsub("Root","ROOT",colnames(tmt_full)[190:234])
+colnames(tmt_full)[64:81] <- gsub("Tassel","TASSEL",colnames(tmt_full)[64:81])
+
+header_list_cut$tmt_label <- substr(header_list_cut$header_list, start = 1, stop = 15)
+table(header_list_cut$tmt_label)
+header_list_cut$Tissue <- header_list_cut$trimmed
+header_list_cut$tmt_label <- gsub(".*_","", header_list_cut$tmt_label)
+tmt_index <- c("B73_r1","B73_r2","B73_r3","Mo17_r1","Mo17_r2","Mo17_r3","BM_r1","BM_r2","BM_r3")
+```
+
+#categorize hybrid-inbred expression
+```{r}
+#colnames(Tissue_full)[73:81] <- gsub("Root","ROOT",colnames(Tissue_full)[73:81])
+#colnames(Tissue_full)[145:153] <- gsub("Ear","EAR",colnames(Tissue_full)[145:153])
+#colnames(Tissue_full)[19:27] <- gsub("Tassel","TASSEL",colnames(Tissue_full)[19:27])
+#Tissues <- unique(gsub("\\_.*","",colnames(Tissue_full)[1:171]))
+#Tissue_full <- Tissue_full[-grep("only",Tissue_full$Accession),]
+#Tissue_full <- Tissue_full[-grep("reverse",Tissue_full$Accession),]
+#Tissue_full_HMP <- data.frame(tmt_full$Accession)
+#colnames(Tissue_full_HMP)[1] <- "Accession"
+Tissue_tmt_sum <- data.frame(tmt_full_2_filtered$Accession)
+colnames(Tissue_tmt_sum)[1] <- "Accession"
+#hybrid_tissue_count <- data.frame(matrix(ncol = 3,nrow = 0)) 
+#colnames(hybrid_tissue_count) <- c("Category","Count","Tissue")
+
+Tissue_full_PD <- data.frame(tmt_full$Accession)
+colnames(Tissue_full_PD)[1] <- "Accession"
+```
+
+#function
+```{r}
+for (i in 1:nrow(Tissues_num)) {
+  
+  
+
+  df_example <- tmt_full_2_filtered[, c(451, grep(Tissues_num[i,1], colnames(tmt_full_2_filtered)))]
+  
+
+    df_example[is.na(df_example)] <- 0
+    df_example[,2:ncol(df_example)] <- as.numeric(unlist(df_example[,2:ncol(df_example)]))
+    df_example <- df_example[which(rowSums(df_example[,2:ncol(df_example)]) > 0),]
+    df_example <- df_example[-which(duplicated(df_example[,2])),]
+
+  
+  if (Tissues_num[i, 2] / 9 == 1) {
+      
+      colnames(df_example)[2:10] <- tmt_index
+    
+  } else {
+        
+        col_num <- c()
+  
+        for (k in 0:(Tissues_num[i, 2] / 9)){
+          
+          col_num[k] <- 9 * (k - 1) + 1
+  }
+  
+        
+        for (j in 1:9){
+          
+          df_example[,(Tissues_num[i,2]+1+j)] <- rowSums(df_example[,(col_num+j)])
+          
+          colnames(df_example)[(Tissues_num[i,2]+1+j)] <- tmt_index[j]
+  }
+}
+  
+  
+  df_example_sub <- df_example[,c(1,(ncol(df_example)-8):ncol(df_example))] 
+  
+  #df_example_sub_2 <- df_example_sub
+  
+  colnames(df_example_sub)[2:ncol(df_example_sub)] <- paste0(Tissues_num[i,1],"_",colnames(df_example_sub)[2:ncol(df_example_sub)])
+  
+  Tissue_tmt_sum <- merge.data.frame(Tissue_tmt_sum, df_example_sub, by.x = "Accession", by.y = "Accession", all.x = T)
+}
+  
+```
+
+#generate PD/HP values
+```{r}
+Tissues_full_HP_PD <- data.frame(Tissue_tmt_sum$Accession)
+colnames(Tissues_full_HP_PD) <- "Accession"
+Tissues_all_categories <- data.frame(matrix(ncol = 5,nrow = 0)) 
+colnames(Tissues_all_categories) <- c("Accession","Tissue", "Category_AD" ,"P_category", "PD_category")
+```
+
+#function for PD/HP
+```{r}
+for (i in 1:length(Tissues)){
+  
+  df_example_sub <- Tissue_tmt_sum[,c(1,grep(Tissues[i], colnames(Tissue_tmt_sum)))]
+  
+  df_example_sub <- na.omit(df_example_sub)
+
+  df_example_sub$B73_mean <- rowMeans(df_example_sub[,c(grep("B73_r",colnames(df_example_sub)))],na.rm = T)
+  df_example_sub$Mo17_mean <- rowMeans(df_example_sub[,c(grep("Mo17_r",colnames(df_example_sub)))],na.rm = T)
+  df_example_sub$BM_mean <- rowMeans(df_example_sub[,c(grep("BM_r",colnames(df_example_sub)))],na.rm = T)
+  
+  df_example_sub$MP1 <- rowMeans(df_example_sub[,c(grep("B73_r1",colnames(df_example_sub)),grep("Mo17_r1",colnames(df_example_sub)))],na.rm = T)
+  df_example_sub$MP2 <- rowMeans(df_example_sub[,c(grep("B73_r2",colnames(df_example_sub)),grep("Mo17_r2",colnames(df_example_sub)))],na.rm = T)
+  df_example_sub$MP3 <- rowMeans(df_example_sub[,c(grep("B73_r3",colnames(df_example_sub)),grep("Mo17_r3",colnames(df_example_sub)))],na.rm = T)
+  #df_example$HMP1 <- df_example[,c(grep("BM-1",colnames(df_example)))]/df_example$MP1
+  #df_example$HMP2 <- df_example[,c(grep("BM-2",colnames(df_example)))]/df_example$MP2
+  #df_example$HMP3 <- df_example[,c(grep("BM-3",colnames(df_example)))]/df_example$MP3
+  df_example_sub$HYBMP <- df_example_sub$BM_mean/rowMeans(df_example_sub[,c("B73_mean","Mo17_mean")])
+  
+  df_example_sub$l2_HMP <- log2(df_example_sub$HYBMP)
+  
+   df_example_sub$HMP_pval <- ttestFun(df_example_sub, c("MP1","MP2","MP3"), c(grep("BM_r",colnames(df_example_sub))))
+   
+  #df_example_sub$HMP_pval_corrected <- p.adjust(df_example_sub$HMP_pval, method = "BY")
+  
+  df_example_sub$hyb_B73 <- log2(df_example_sub$BM_mean/df_example_sub$B73_mean)
+  df_example_sub$hyb_Mo17 <- log2(df_example_sub$BM_mean/df_example_sub$Mo17_mean)
+  
+  df_example_sub$HP_value <- pmax(df_example_sub$B73_mean, df_example_sub$Mo17_mean)
+  df_example_sub$LP_value <- pmin(df_example_sub$B73_mean, df_example_sub$Mo17_mean)
+  
+  df_example_sub$HP <- "B73"
+  df_example_sub[which(df_example_sub$HP_value == df_example_sub$Mo17_mean), "HP"] <- "Mo17"
+  
+  df_example_sub$LP <- "B73"
+  df_example_sub[which(df_example_sub$LP_value == df_example_sub$Mo17_mean), "LP"] <- "Mo17"
+  
+  
+  df_example_sub$HHP <- ""
+  df_example_sub$HLP <- ""
+  
+  df_example_sub[which(df_example_sub$HP == "B73"), "HHP"] <- df_example_sub[which(df_example_sub$HP == "B73"), "hyb_B73"]
+  df_example_sub[which(df_example_sub$LP == "B73"), "HLP"] <- df_example_sub[which(df_example_sub$LP == "B73"), "hyb_B73"]
+  
+    df_example_sub[which(df_example_sub$HP == "Mo17"), "HHP"] <- df_example_sub[which(df_example_sub$HP == "Mo17"), "hyb_Mo17"]
+    df_example_sub[which(df_example_sub$LP == "Mo17"), "HLP"] <- df_example_sub[which(df_example_sub$LP == "Mo17"), "hyb_Mo17"]
+  
+    df_example_sub$HHP_pval <- ""
+     df_example_sub$HLP_pval <- ""
+    
+ df_example_sub$hyb_B73_pval <- ttestFun(df_example_sub, c(grep("B73_r",colnames(df_example_sub))), c(grep("BM_r",colnames(df_example_sub))))
+ 
+  df_example_sub$hyb_Mo17_pval <- ttestFun(df_example_sub, c(grep("Mo17_r",colnames(df_example_sub))), c(grep("BM_r",colnames(df_example_sub))))
+  
+  #df_example_sub$hyb_B73_pval_corrected <- p.adjust(df_example_sub$hyb_B73_pval, method = "BH")
+  
+  #df_example_sub$hyb_Mo17_pval_corrected <- p.adjust(df_example_sub$hyb_Mo17_pval, method = "BH")
+                                                                                                          
+  df_example_sub[df_example_sub$HP == "B73", "HHP_pval"] <- df_example_sub[df_example_sub$HP == "B73", "hyb_B73_pval"]
+  
+  df_example_sub[df_example_sub$HP == "Mo17", "HHP_pval"] <- df_example_sub[df_example_sub$HP == "Mo17", "hyb_Mo17_pval"]
+  
+  df_example_sub[df_example_sub$LP == "B73", "HLP_pval"] <- df_example_sub[df_example_sub$LP == "B73", "hyb_B73_pval"]
+  
+  df_example_sub[df_example_sub$LP == "Mo17", "HLP_pval"] <- df_example_sub[df_example_sub$LP == "Mo17", "hyb_Mo17_pval"]
+    #df_example_sub$HHP_pval_corrected <- p.adjust(df_example_sub$HHP_pval, method = "BH")
+    # df_example_sub$HLP_pval_corrected <- p.adjust(df_example_sub$HLP_pval, method = "BH")
+  
+  df_example_sub$B73Mo17 <- df_example_sub$B73_mean/df_example_sub$Mo17_mean
+  
+  df_example_sub$l2_B73Mo17 <- log2(B73Mo17)
+  
+  df_example_sub$B73Mo17_pval <- ttestFun(df_example_sub, c(grep("Mo17_r",colnames(df_example_sub))), c(grep("B73_r",colnames(df_example_sub))))
+  #df_example_sub$B73Mo17_pval_corrected <- p.adjust(df_example_sub$B73Mo17_pval, method = "BH")
+  
+  
+  
+  
+  #assign category
+  
+  df_example_sub$Category_AD <- "Additive"
+  
+  df_example_sub[which(abs(df_example_sub$l2_HMP) > log2(1.25) & df_example_sub$HMP_pval < 0.01), "Category_AD"] <- "Nonadditive"
+  
+ # df_example_sub$Category <- "Other"
+   
+   df_example_sub[which(df_example_sub$l2_HMP > log2(1.25) & df_example_sub$HMP_pval < 0.01 & df_example_sub$HHP < log2(1.25)),"Category_AD"] <- "HP_dominant"
+   
+    df_example_sub[which(df_example_sub$l2_HMP < log2(0.8) & df_example_sub$HMP_pval < 0.01 & df_example_sub$HLP > log2(0.8)),"Category_AD"] <- "LP_dominant"
+   
+   
+      df_example_sub[which(df_example_sub$HHP > log2(1.25) & df_example_sub$HHP_pval < 0.01),"Category_AD"] <- "AHP_overdominant"
+   
+   df_example[which(df_example$HMP_pval < 0.01 & df_example$HMP >1 & df_example$HYB_HP <1 & df_example$HYB_HP_pval > 0.01), "Category"] <- "PD_H"
+   
+   df_example_sub[which(df_example_sub$HLP < log2(0.8) & df_example_sub$HLP_pval <0.01),"Category_AD"] <- "BLP_overdominant"
+   
+   #df_example_sub[which(df_example_sub$HMP_pval < 0.01 & df_example_sub$l2_HMP < log2(0.8) & df_example_sub$HLP_pval > 0.05),"Category"] <- "LP_dominant"
+   
+   df_example[which(df_example$HMP_pval < 0.01 & df_example$HMP < 1 & df_example$HYB_LP >1 & df_example$HYB_LP_pval > 0.01), "Category"] <- "PD_L"
+  #df_example_sub$HYB_category <- "Additive"
+  #df_example_sub[which(abs(df_example_sub$l2_HMP) >= log2(1.25) & df_example_sub$HMP_pval_corrected <= 0.05), "HYB_category"] <- "Nonadditive"
+  
+  df_example_sub$P_category <- "NonDE"
+  df_example_sub[which(df_example_sub$l2_B73Mo17 > log2(1.25) & df_example_sub$B73Mo17_pval< 0.01), "P_category"] <- "DE_B73"
+  df_example_sub[which(df_example_sub$l2_B73Mo17 < log2(0.8) & df_example_sub$B73Mo17_pval< 0.01), "P_category"] <- "DE_Mo17"
+  
+
+  df_example_sub$PD_category <- "Other"
+  
+  df_example_sub[which(df_example_sub$P_category != "NonDE" & df_example_sub$Category_AD == "Nonadditive"), "PD_category"] <- "DE_NONADD"
+ 
+   df_example_sub[which(df_example_sub$P_category != "NonDE" & df_example_sub$Category_AD == "LP_dominant"), "PD_category"] <- "PD"
+   
+   df_example_sub[which(df_example_sub$P_category != "NonDE" & df_example_sub$Category_AD == "HP_dominant"), "PD_category"] <- "PD"
+   
+   df_example_sub[which(df_example_sub$P_category != "NonDE" & df_example_sub$Category_AD == "BLP_overdominant"), "PD_category"] <- "PD"
+   
+    df_example_sub[which(df_example_sub$P_category != "NonDE" & df_example_sub$Category_AD == "AHP_overdominant"), "PD_category"] <- "PD"
+  
+  
+  
+  #hybrid_tissue_count[nrow(hybrid_tissue_count)+1, 1:3] <- c("Detected",nrow(df_example_sub),Tissues_num[i,1])
+  
+  #hybrid_tissue_count[nrow(hybrid_tissue_count)+1, 1:3] <- c("Non-additive",nrow(df_example_sub[df_example_sub$HYB_category == "Nonadditive",]),Tissues_num[i,1])
+  
+   #hybrid_tissue_count[nrow(hybrid_tissue_count)+1, 1:3] <- c("Additive", nrow(df_example_sub[df_example_sub$HYB_category == "Additive",]),Tissues_num[i,1])
+   
+   #hybrid_tissue_count[nrow(hybrid_tissue_count)+1, 1:3] <- c("B73_D", nrow(df_example_sub[df_example_sub$P_category == "B73_D",]), Tissues_num[i,1])
+   #hybrid_tissue_count[nrow(hybrid_tissue_count)+1, 1:3] <- c("Mo17_D", nrow(df_example_sub[df_example_sub$P_category == "Mo17_D",]), Tissues_num[i,1])
+   
+   #colnames(df_example_sub)[17:26] <- paste0(Tissues_num[i,1],"_",colnames(df_example_sub)[17:26])
+   
+  #Tissue_full_PD <- merge.data.frame(Tissue_full_PD, df_example_sub[,c(1,17:26)], by.x = "Accession", by.y = "Accession", all.x = T)
+    
+   df_example_to_merge <- df_example_sub[, c("Accession","l2_HMP","HMP_pval","HP","LP","HHP", "HLP", "HHP_pval", "HLP_pval", "l2_B73Mo17", "B73Mo17_pval", "P_category", "Category_AD", "PD_category")]
+   
+   colnames(df_example_to_merge)[2:14] <- paste0(Tissues[i],"_",colnames(df_example_to_merge)[2:14])
+  
+   Tissues_full_HP_PD <- merge.data.frame(Tissues_full_HP_PD, df_example_to_merge, by.x = "Accession", by.y = "Accession", all.x = T)
+   
+   df_example_sub$Tissue <- Tissues[i]
+   
+   df_category <- df_example_sub[, c("Accession","Tissue", "Category_AD", "P_category", "PD_category")]
+  
+  Tissues_all_categories <- rbind(Tissues_all_categories, df_category)
+  
+  
+  }
+
+                               
+```
+
+#categorize 
+```{r}
+DE_tissue_count <- Tissues_all_categories %>% group_by(Tissue,P_category) %>% tally()
+DE_tissue_count$Category <- "No"
+DE_tissue_count[grep("DE_", DE_tissue_count$P_category), "Category"] <- "Yes"
+DE_tissue_count$Type <- "DE"
+DE_tissue_count <- data.frame(DE_AD_tissue_count)
+
+AD_tissue_count <- Tissues_all_categories %>% group_by(Tissue, Category_AD) %>% tally()
+AD_tissue_count$Category <- "Yes"
+AD_tissue_count[grep("Additive", AD_tissue_count$Category_AD), "Category"] <- "No"
+AD_tissue_count$Type <- "AD"
+
+DE_AD_tissue_count <- rbind(DE_tissue_count[,c("Tissue","Category","n","Type")], AD_tissue_count[,c("Tissue","Category","n","Type")])
+
+DE_AD_tissue_count_2 <- data.frame(DE_AD_tissue_count %>% group_by(Tissue, Category) %>% summarise(sum = sum(n)))
+DE_AD_tissue_count_2$Type <- "AD"
+DE_AD_tissue_count_2[grep("DE", DE_AD_tissue_count_2$Category), "Type"] <- "DE"
+DE_AD_tissue_count_2$Category_2 <- DE_AD_tissue_count_2$Category
+DE_AD_tissue_count_2[DE_AD_tissue_count_2$Category_2 == "Non-DE", "Category_2"] <- "A_DE"
+
+Dominant_count <- Tissues_all_categories[grep("dominant",Tissues_all_categories$Category_AD),]
+Dominant_count <- data.frame(Dominant_count %>% group_by(Tissue) %>% tally())
+Dominant_count$n <- Dominant_count$n - PD_count$n
+Dominant_count$Type <- "Z"
+
+DE_tissue_count <- data.frame(DE_tissue_count[DE_tissue_count$P_category != "NonDE", c(1,3)] %>% group_by(Tissue) %>% summarise(n = sum(n)))
+DE_tissue_count$n <- DE_tissue_count$n - PD_count$n
+DE_tissue_count$Type <- "DE"
+
+PD_count <- data.frame(Tissues_all_categories %>% group_by(Tissue, PD_category) %>% tally())
+PD_count <- data.frame(PD_count[PD_count$PD_category == "PD", c(1,3)])
+PD_count$Type <- "PD"
+
+PD_count_input <- rbind(Dominant_count, DE_tissue_count, PD_count)
+
+```
+
+
+#find Proteome dominance and HMP
+```{r}
+  ggplot(Nonadd_D_all, aes(l2_HMP, Tissue, fill = P_category_2)) +geom_density_ridges(alpha = 0.85) + 
+  scale_fill_manual(values = c("B73" = "salmon", "Mo17" = "lightblue"))+
+  #xlim(-2.5,2) + 
+  theme_minimal()+
+  theme(axis.text.y = element_text(size = 9, vjust = 0.7, hjust = 0.5, angle = -90))+
+  theme(axis.title.y = element_text(size = 10, vjust = 0.5, hjust = 0.5, angle = -90))+
+  xlab("log2 HYB/MP Protein Abundance") +
+  ylab("") +
+  theme(legend.position = "top", legend.text = element_text(size = 8, angle = -90), legend.title = element_text(angle = -90, vjust = 2, size = 10, face = "bold"), legend.key.width = unit(0.6,'cm'), legend.key.size =unit(1,"mm"), legend.title.align = 0.5, legend.box.spacing = unit(0,"pt"), legend.text.align = 0.5)+
+  theme(axis.text.x = element_text(vjust = 0.9, hjust = 0.9,color = "black", angle = -90))+
+  labs(fill = "HP") +
+  #geom_hline(yintercept = log2(1.25), color = "darkgray", linetype = "dashed")+
+  # geom_hline(yintercept = -log2(1.25), color = "darkgray", linetype = "dashed")
+coord_flip()+
+  scale_x_reverse(lim = c(1.8,-1.8)) +
+theme(plot.margin = margin(1,1,0,2, "mm"))+
+  guides(fill= guide_legend(title.position = "right"))
+  
+```
+
+
+#DE and AD count barplot
+```{r}
+Tissue_full_HMP_pval_corrected <- Tissue_full_HMP
+adjust_p_BH <- function(x){
+  p.adjust(x, method = "BH")
+}
+apply(Tissue_full_HMP_pval_corrected[,grep("pval", colnames(Tissue_full_HMP_pval_corrected))], 2, adjust_p_BH)
+
+hybrid_tissue_count$Count <- as.numeric(hybrid_tissue_count$Count)
+HMP_NA_count$n <- as.numeric(HMP_NA_count$n)
+
+ggplot(tmt_HMP_count[tmt_HMP_count$Category %in% selected_category,], aes(Tissue, Count, fill = Category)) +geom_bar(position = "dodge", stat = "identity")+ theme_light() +
+  theme(axis.text.x = element_text(size = 8,angle = 45, vjust = 0.9, hjust = 0.8, color = "black")) +
+  #scale_fill_manual(values = c("AMP" = "orange", "BMP" = "darkblue")) +
+  scale_fill_brewer(palette = "Paired")+
+  ylab("Protein count") + 
+  xlab("") +
+ theme(plot.margin = margin(4,1,0.5,1, "mm"))+
+     theme(legend.position = "bottom", legend.text = element_text(size = 8), legend.title = element_text(size = 8), 
+ # legend.box.margin = margin(5,5,5,5), legend.margin = margin(0,0,0,0))
+ legend.box.spacing = unit(-12, "pt"))
+  
+
+PD_tissue <- Nonadd_D_count[Nonadd_D_count$Type == "Nonadditive",]
+PD_tissue$Category <- paste0(PD_tissue$P_category_2, "_PD")
+colnames(PD_tissue)[3] <- "Count"
+tmt_HMP_count <- rbind(tmt_HMP_count, PD_tissue[,c("Category","Count","Tissue","percent_detected")])
+selected_category <- c("DE_B73_HP", "DE_Mo17_HP", "PD_B73_HP", "PD_Mo17_HP")
+
+Nonadd_D_all[Nonadd_D_all$l2_HMP>0, "HMP_category"] <- "Nonadditive_AMP"
+Nonadd_D_all[Nonadd_D_all$l2_HMP<0, "HMP_category"] <- "Nonadditive_BMP"
+
+PD_MP <- data.frame(Nonadd_D_all %>% group_by(Tissue,P_category, HMP_category) %>% tally())
+
+ggplot(DE_AD_tissue_count_2, aes(Type, sum, fill = Category_2)) +
+ #geom_col_pattern(position = position_dodge(), color = "white", pattern_density = 0.08, pattern_fill = "white", pattern_spacing = 0.02, pattern_angle = 45)+ 
+  
+  geom_bar(stat = "identity", position = "stack")+
+ geom_text(aes(label = sum, color = Category_2), size = 2, angle = 90, hjust = 0)+
+ 
+  theme_minimal() +
+  #theme(text = element_text(size = 3))+
+  theme(axis.text.x = element_text(size = 9,angle = 35, vjust = 1, hjust = 0.7, color = "black")) +
+  #scale_fill_manual(values = c("AMP" = "orange", "BMP" = "darkblue")) +
+  #scale_fill_manual(values = c("DE" = "salmon", "AD" = "lightblue"))+
+  scale_fill_manual(values = c("Additive" = "#C6DBEF", "Non-additive" = "#6BAED6", "A_DE" = "#BFE2DC", "DE" = "#74C476"), labels = c("Non-DE", "Additive", "DE", paste("Non \n Additive")))+
+    
+  scale_color_manual(values = c("Additive" = "000000AA#", "Non-additive" = "black", "A_DE" = "000000AA#", "DE" ="black"))+
+    
+  #scale_fill_brewer()+
+  ylab("Protein count") + 
+  xlab("") +
+# theme(plot.margin = margin(0.5,1,1,1, "mm"))+
+     theme(legend.position = "top", legend.text = element_text(size = 6, angle = 90, hjust = 0, face = "bold"),
+ legend.box.margin = margin(0.5,0.5,0.5,0.5), legend.margin = margin(0,0,0,0),
+ legend.spacing = unit(5, "mm"), legend.text.align = 0.5, legend.key.width = unit(1,'line'), legend.key.height = unit(1, 'mm')) +
+  theme(axis.text.x = element_blank())+
+    theme(axis.text.y = element_text(angle = 90))+
+#scale_pattern_manual(values = c("Yes" = "stripe", "No" = "none")) +
+  labs(fill = "") +
+  
+#guides(fill = guide_legend(override.aes = list(size = 7)))+
+         #guides(fill = guide_legend(title = NULL))+
+  guides(color = FALSE)+
+  #guides(color = guide_legend(override.aes = list(color = "white",)))+
+  #guides(color = guide_legend(label.theme = element_text(color = "white")))+
+  
+  theme(strip.text = element_text(angle = 90, size = 8, face = "bold", hjust = 1.1))+
+theme(plot.margin = margin(3,1,0,1, "mm"))+
+
+  #coord_flip()+
+  facet_grid(~Tissue, switch = "both")
+  #scale_x_reverse(lim = c(12000, 0))
+  
+ # coord_flip()
+
+  
+ 
+  
+
+```
+
+#GO enrichment function
+```{r}
+GO_dominant_summary_BP <- data.frame()
+
+for (i in 1:length(Tissues)){
+  tissue_all <- Tissues_all_categories[Tissues_all_categories$Tissue == Tissues[i],]
+  #tissue_all <- na.omit(tissue_all)
+  tissue_all$Gene <- substr(tissue_all$Accession, start = 1, stop = 14)
+  gamercut <- gamer[gamer$db_object_id %in% tissue_all$Gene,]
+  
+  #nonadditive <- PD_all[PD_all$Tissue == Tissues_num[i,1],]
+  #nonadditive_AMP <- nonadditive[nonadditive$Category == "AMP",]
+  #nonadditive_BMP <- nonadditive[nonadditive$Category == "BMP",]
+  tissue_PD <- Dominant_only[Dominant_only$Tissue == Tissues[i],]
+  tissue_PD$Gene <- substr(tissue_PD$Accession, start = 1, stop = 14)
+  
+  PD_GO <- merge_module_GO(df = tissue_PD, gamer_tissue_cut = gamercut, nodesize = 5)
+  #AMP_GO$Category <- "AMP"
+  #BMP_GO <- merge_module_GO(df = nonadditive_BMP,gamer_tissue_cut = gamercut,nodesize = 1)
+  #BMP_GO$Category <- "BMP"
+  #GO_all <- rbind(AMP_GO, BMP_GO)
+  PD_GO$Tissue <- Tissues[i]
+  
+  GO_dominant_summary_BP <- rbind(PD_GO, GO_dominant_summary_BP)
+}
+```
+
+```{r}
+#df_example$HP_value <- pmax(df_example[,"B73"],df_example[,"Mo17"])
+  #df_example$HYB_HP <- df_example$BM_mean/pmax(df_example[,"B73_mean"],df_example[,"Mo17_mean"])
+  #df_example$HP_index <- apply(df_example[,c("B73_mean","Mo17_mean")],1,which.max)
+ 
+  #df_example[df_example$HP_index == 1, "HP"] <- "B73"
+  #df_example[df_example$HP_index == 2, "HP"] <- "Mo17"
+  
+  #df_example$HYB_HP_pval <- ""
+  df_example[df_example$HP == "B73","HYB_HP_pval"] <- ttestFun(df_example[df_example$HP == "B73",], c(grep("BM-",colnames(df_example))),c(grep("B73-",colnames(df_example))))
+   df_example[df_example$HP == "Mo17","HYB_HP_pval"] <- ttestFun(df_example[df_example$HP == "Mo17",], c(grep("BM-",colnames(df_example))),c(grep("Mo17-",colnames(df_example))))
+   
+  df_example$HYB_LP <- df_example$BM_mean/pmin(df_example[,"B73_mean"],df_example[,"Mo17_mean"])
+   df_example$LP_index <- apply(df_example[,c("B73_mean","Mo17_mean")],1,which.min)
+     df_example[df_example$LP_index == 1, "LP"] <- "B73"
+  df_example[df_example$LP_index == 2, "LP"] <- "Mo17"
+  
+  df_example$HYB_LP_pval <- ""
+  df_example[df_example$LP == "B73","HYB_LP_pval"] <- ttestFun(df_example[df_example$LP == "B73",], c(grep("BM-",colnames(df_example))),c(grep("B73-",colnames(df_example))))
+   df_example[df_example$LP == "Mo17","HYB_LP_pval"] <- ttestFun(df_example[df_example$LP == "Mo17",], c(grep("BM-",colnames(df_example))),c(grep("Mo17-",colnames(df_example))))
+   
+   #df_example <- df_example[!is.na(df_example$HMP),]
+   #df_example <- df_example[!grepl("Inf",df_example$HMP),]
+   df_example$Category <- ""
+   #df_example[,c("HMP_pval","HYB_HP_pval","HYB_LP_pval")] <- as.numeric(unlist(df_example[,c("HMP_pval","HYB_HP_pval","HYB_LP_pval")]))
+   
+   #assign category
+   df_example[which(df_example$HMP_pval >= 0.05), "Category"] <- "MP"
+   df_example[which(df_example$HYB_HP >1 & df_example$HYB_HP_pval < 0.05),"Category"] <- "AHP"
+   df_example[which(df_example$HMP_pval < 0.05 & df_example$HMP >1 & df_example$HYB_HP_pval >= 0.05),"Category"] <- "HP"
+   #df_example[which(df_example$HMP_pval <0.05 & df_example$HMP >1 & df_example$HYB_HP <1 & df_example$HYB_HP_pval < 0.05), "Category"] <- "PD_H"
+   
+   df_example[which(df_example$HYB_LP <1 & df_example$HYB_LP_pval <0.05),"Category"] <- "BLP"
+   df_example[which(df_example$HMP_pval < 0.05 & df_example$HMP <1 & df_example$HYB_LP_pval >= 0.05),"Category"] <- "LP"
+   df_example[which(df_example$HMP_pval <0.05 & df_example$HMP <1 & df_example$HYB_LP >1 & df_example$HYB_LP_pval < 0.05), "Category"] <- "PD_L"
+   
+   hybrid_pool[,(9*i-6):(9*i+2)] <- df_example[match(hybrid_pool$Accession,df_example$Accession),c("HMP1","HMP2","HMP3","HMP","HYB_HP","HP","HYB_LP","LP","Category")]
+   colnames(hybrid_pool)[(9*i-6):(9*i+2)] <- paste0(Tissues_index[i],"_",colnames(hybrid_pool)[(9*i-6):(9*i+2)])
+  
+   hybrid_count <- data.frame(table(df_example$Category))
+   hybrid_count$Tissue <- Tissues_index[i]
+   colnames(hybrid_count)[1:2] <- c("Category","Count")
+   hybrid_tissue_count <- rbind(hybrid_tissue_count, hybrid_count)
+}
+   
+ 
+   
+```
+
+
+
+#plot hybrid distribution
+```{r}
+hybrid_tissue_count$total_count <- hybrid_count[match(hybrid_tissue_count$Tissue, hybrid_count$Tissue),"sum.Count."]
+hybrid_count <- data.frame(hybrid_tissue_count %>% group_by(Tissue) %>% summarise(sum(Count)))
+hybrid_tissue_count$percent <- hybrid_tissue_count$Count/hybrid_tissue_count$total_count
+
+ggplot(hybrid_tissue_count, aes(Tissue, percent, fill = Category)) + geom_bar(stat = "identity",position = "stack")+
+  scale_x_discrete() +
+  scale_fill_brewer(palette = "Set3")+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 45,vjust = 0.8, hjust = 0.8, color = "black"))+
+  ylab("Percent total proteins detected")+
+  xlab("")
+
+```
+
+
+#client chaperone scatter
+```{r}
+seedling_mature_leaf$MP1 <- rowMeans(seedling_mature_leaf[,c("SeedlingLeaf.B73.r1","SeedlingLeaf.Mo17.r1")])
+seedling_mature_leaf$MP2 <- rowMeans(seedling_mature_leaf[,c("SeedlingLeaf.B73.r2","SeedlingLeaf.Mo17.r2")])
+seedling_mature_leaf$MP3 <- rowMeans(seedling_mature_leaf[,c("SeedlingLeaf.B73.r3","SeedlingLeaf.Mo17.r3")])
+seedling_mature_leaf$ttest.MP <- ttestFun(seedling_mature_leaf, c("MP1","MP2","MP3"), c("SeedlingLeaf.BM.r1","SeedlingLeaf.BM.r2","SeedlingLeaf.BM.r3"))
+seedling_mature_leaf$ttest.P <- ttestFun(seedling_mature_leaf,c("SeedlingLeaf.B73.r1","SeedlingLeaf.B73.r2","SeedlingLeaf.B73.r3"), c("SeedlingLeaf.Mo17.r1","SeedlingLeaf.Mo17.r2","SeedlingLeaf.Mo17.r3"))
+
+
+
+client_category <- c("PhANGs","PhAPGs")
+plastid_client <- SL_GOIs[SL_GOIs$Category %in% client_category,]
+plastid_client$Type <- "Client"
+plastid_candidate <- read.csv("~/Desktop/plastid_candidates.csv", header = F)
+plastid_client <- plastid_client[,-2]
+colnames(plastid_candidate) <- colnames(plastid_client)
+plastid_chaperone_client <- rbind(plastid_candidate,plastid_client)
+
+plastid_candidate_2 <- plastid_candidate[plastid_candidate$Category %in% c("Chloroplast RNA processing","Chloroplast transcription","Chloroplast translation","Plastid ribosome accumulation"),]
+plastid_candidate_2 <- merge.data.frame(plastid_candidate_2,seedling_mature_leaf[,c(12,24:28)],by.x = "Gene", by.y = "Gene")
+plastid_candidate_2 <- plastid_candidate_2[-which(duplicated(plastid_candidate_2$Gene)),]
+
+plastid_chaperone_client_RNA <- plastid_chaperone_client
+plastid_chaperone_client_RNA <- merge.data.frame(plastid_chaperone_client_RNA, cpm.SL[,c("Gene","l2.B73xMo17.MP","l2.B73.Mo17","ttest.MP","ttest.P")], by.x = "Gene", by.y = "Gene", all.x = T)
+plastid_chaperone_client_RNA <- merge.data.frame(plastid_chaperone_client_RNA, seedling_mature_leaf[,c("Gene", "Accession","SeedlingLeaf.BM.MP","SeedlingLeaf.B73.Mo17","ttest.MP","ttest.P")], by.x = "Gene", by.y = "Gene", all.x = T)
+plastid_chaperone_client_RNA <- plastid_chaperone_client_RNA[-grep("only",plastid_chaperone_client_RNA$Accession),]
+plastid_chaperone_client_RNA <- plastid_chaperone_client_RNA[-grep("reverse",plastid_chaperone_client_RNA$Accession),]
+plastid_chaperone_client_RNA <- plastid_chaperone_client_RNA[-which(duplicated(plastid_chaperone_client_RNA$Accession)),]
+
+plastid_chaperone_client_RNA_2 <- na.omit(plastid_chaperone_client_RNA)
+plastid_chaperone_client_RNA_2$l2.B73.Mo17_protein <- log2(plastid_chaperone_client_RNA_2$SeedlingLeaf.B73.Mo17)
+plastid_chaperone_client_RNA_2$l2.BM_protein <- log2(as.numeric(plastid_chaperone_client_RNA_2$SeedlingLeaf.BM.MP))
+plastid_chaperone_client_RNA_HMP <- plastid_chaperone_client_RNA_2[which(plastid_chaperone_client_RNA_2$l2.B73xMo17.MP >0 & plastid_chaperone_client_RNA_2$l2.BM_protein >0),]
+plastid_chaperone_client_RNA_HMP <- plastid_chaperone_client_RNA_HMP[which(plastid_chaperone_client_RNA_HMP$ttest.MP.x <0.05 &plastid_chaperone_client_RNA_HMP$ttest.MP.y <0.05),]
+assembly_HMP <- plastid_chaperone_client_RNA_HMP[plastid_chaperone_client_RNA_HMP$Type == "Assembly factor",c(2:5,7,12,15)]
+assembly_HMP <- assembly_HMP[c(1:4,6,5,7)]
+colnames(assembly_HMP)[4:7] <- c("RNA_l2_HMP","RNA_pval","Protein_l2_HMP","Protein_pval")
+
+assembly_MP_RNA_AMP_protein <- plastid_chaperone_client_RNA_2[which(plastid_chaperone_client_RNA_2$ttest.MP.x >0.05 & plastid_chaperone_client_RNA_2$l2.BM_protein >0),]
+assembly_MP_RNA_AMP_protein <- assembly_MP_RNA_AMP_protein[which(assembly_MP_RNA_AMP_protein$ttest.MP.y < 0.05),]
+assembly_MP_RNA_AMP_protein <- assembly_MP_RNA_AMP_protein[assembly_MP_RNA_AMP_protein$Type == "Assembly factor",c(2,4:8,12:15)]
+assembly_MP_RNA_AMP_protein <- assembly_MP_RNA_AMP_protein[,c(1:6,10,9,7:8)]
+colnames(assembly_MP_RNA_AMP_protein)[3:10] <- c("RNA_l2_HMP","RNA_l2_B73/Mo17","RNA_HMP_pval","RNA_B73/Mo17_pval","Protein_l2_HMP","Protein_l2_B73/Mo17","Protein_HMP_pval","Protein_B73/Mo17_pval")
+assembly_MP_RNA_AMP_protein <- assembly_MP_RNA_AMP_protein[,c(1:3,5,7,9)]
+
+plastid_chaperone_client_protein <- plastid_chaperone_client
+plastid_chaperone_client_protein$protein_HMP <- seedling_mature_leaf[match(plastid_chaperone_client$Gene, seedling_mature_leaf$Gene),"SeedlingLeaf.BM.MP"]
+plastid_chaperone_client_protein$protein_PP <- seedling_mature_leaf[match(plastid_chaperone_client$Gene, seedling_mature_leaf$Gene),"SeedlingLeaf.B73.Mo17"]
+
+plastid_chaperone_client_protein <- na.omit(plastid_chaperone_client_protein)
+#plastid_chaperone_client <- plastid_chaperone_client[-grep("DIV",plastid_chaperone_client$protein_HMP),]
+plastid_chaperone_client_protein$l2_protein_HMP <- log2(as.numeric(plastid_chaperone_client_protein$protein_HMP))
+plastid_chaperone_client_protein$l2_PP <- log2(as.numeric(plastid_chaperone_client_protein$protein_PP))
+
+ggplot(plastid_chaperone_client_protein, aes(l2_protein_HMP,l2_PP, color = Type)) +geom_point(size = 2)+
+  xlab("l2_B73xMo17/MP_protein") +ylab("l2_B73/Mo17_protein") +xlim(-1,1) +ylim(-1,1) 
+
+plastid_chaperone_client[,5:6] <- as.numeric(unlist(plastid_chaperone_client[,5:6]))
+
+
+par(mar = c(7,4,4,2) + 0.1)
+heatmap.2(as.matrix(Rubisco_candidate_protein[,2:4]),labCol = c("B73","Mo17","BM"),labRow = Rubisco_candidate_protein$Symbol, trace = "none",offsetRow = -0.3, keysize = 0.4, density.info = "none", dendrogram = "row",lhei = c(2,6), lwid = c(1,4), margins = c(4,6), cexRow = 0.7, scale = "row",cexCol = 1, lmat = rbind(c(4,3),c(2,1)),srtCol = 0, distfun = dist, hclustfun = hclust, Rowv = T)
+graphics.off()
+
+heatmap(as.matrix(Rubisco_candidate_RNA[,3:5]),Rowv = T,scale = "row",labCol = colnames(Rubisco_candidate_RNA)[3:5],labRow = Rubisco_candidate_RNA$Symbol,Colv = F, cexCol = 1,)
+
+cpm.SL_client_chaperone <- merge.data.frame(cpm.SL[,c("B73","Mo17","B73xMo17","Gene")],plastid_chaperone_client[,1:4], by.x = "Gene", by.y = "Gene", all.y = T)
+
+tmt_client_chaperone <- merge.data.frame(plastid_chaperone_client[1:4],seedling_mature_leaf[,c("Gene","SeedlingLeaf.B73.mean","SeedlingLeaf.Mo17.mean","SeedlingLeaf.BM.mean")], by.x = "Gene", by.y = "Gene")
+tmt_client_chaperone$HHP <- tmt_client_chaperone$SeedlingLeaf.BM.mean/pmax(tmt_client_chaperone$SeedlingLeaf.B73.mean,tmt_client_chaperone$SeedlingLeaf.Mo17.mean)
+tmt_client_chaperone$HMP <- tmt_client_chaperone$SeedlingLeaf.BM.mean/rowMeans(tmt_client_chaperone[,c("SeedlingLeaf.B73.mean","SeedlingLeaf.Mo17.mean")])
+tmt_client_chaperone$BLP <- tmt_client_chaperone$SeedlingLeaf.BM.mean/pmin(tmt_client_chaperone$SeedlingLeaf.B73.mean,tmt_client_chaperone$SeedlingLeaf.Mo17.mean)
+
+tmt_client_chaperone %>% group_by(Category) %>% summarise(HHP = mean(HHP), HMP = mean(HMP))
+tmt_client_chaperone <- tmt_client_chaperone[-which(is.na(tmt_client_chaperone$HHP)),]
+
+Rubisco_candidate_arabidopsis <- read.csv("~/Downloads/Arabidopsis_rubisco.csv")
+tmt_arabidopsis <- read.csv("~/Downloads/Arabidopsis_tmt.csv")
+arabidopsis_client_chaperone <- rbind(plastid_candidate,plastid_client)
+arabidopsis_client_chaperone <- arabidopsis_client_chaperone[arabidopsis_client_chaperone$Type %in% c("Assembly factor","Client","Proteostasis component"),]
+arabidopsis_client_chaperone$arabidopsis_ID <- v4_annot[match(arabidopsis_client_chaperone$Gene,v4_annot$v4_gene_model),"arabidopsis_ortholog"]
+tmt_arabidopsis$Gene <- substr(tmt_arabidopsis$Accession, start = 1, stop = 9)
+arabidopsis_client_chaperone <- merge.data.frame(arabidopsis_client_chaperone,tmt_arabidopsis[,13:18],by.x = "arabidopsis_ID", by.y = "Gene", all.x = T)
+arabidopsis_client_chaperone <- arabidopsis_client_chaperone[-which(duplicated(arabidopsis_client_chaperone$arabidopsis_ID)),]
+arabidopsis_client_chaperone <- arabidopsis_client_chaperone[-which(is.na(arabidopsis_client_chaperone$HMP)),]
+
+
+cpm.SL_client_chaperone$HHP <- cpm.SL_client_chaperone$B73xMo17/pmax(cpm.SL_client_chaperone$B73,cpm.SL_client_chaperone$Mo17)
+cpm.SL_client_chaperone$HMP <- cpm.SL_client_chaperone$B73xMo17/rowMeans(cpm.SL_client_chaperone[,c("B73","Mo17")])
+HHP_assembly_factor <- tmt_client_chaperone[tmt_client_chaperone$Type == "Assembly factor",c("Protein","Gene","Category","Type","HHP","HMP")]
+HHP_assembly_factor$HHP_RNA <- cpm.SL_client_chaperone[match(HHP_assembly_factor$Gene, cpm.SL_client_chaperone$Gene),"HHP"]
+HHP_assembly_factor$HMP_RNA <- cpm.SL_client_chaperone[match(HHP_assembly_factor$Gene, cpm.SL_client_chaperone$Gene),"HMP"]
+```
+
+
+```{r}
+WGCNA_client_chaperone <- rbind(plastid_candidate,plastid_client)
+WGCNA_client_chaperone <- merge.data.frame(WGCNA_client_chaperone,protein_WGCNA[,c("Gene","G.S_height_protein","moduleColors_protein")], by.x = "Gene", by.y = "Gene", all.x = T)
+WGCNA_client_chaperone <- merge.data.frame(WGCNA_client_chaperone,RNA_WGCNA[,c("G.S_height","Gene","moduleColors")], by.x = "Gene", by.y = "Gene", all.x = T)
+WGCNA_client_chaperone <- WGCNA_client_chaperone[-which(duplicated(WGCNA_client_chaperone$Gene)),]
+
+WGCNA_client_chaperone[is.na(WGCNA_client_chaperone$moduleColors),"moduleColors"] <- "Other"
+client_chaperone_protein <- WGCNA_client_chaperone[WGCNA_client_chaperone$moduleColors_protein == "blue",2:5]
+client_chaperone_RNA <- WGCNA_client_chaperone[WGCNA_client_chaperone$moduleColors == "black",c(2:4,7)]
+
+Rubisco_candidate <- read.csv("~/Desktop/Lab/Regulator story/test_candidate_gene/Rubisco_subunit.csv")
+Rubisco_candidate_RNA <- merge.data.frame(Rubisco_candidate,cpm.SL[,c(1,2:13)], by.x = "Gene",by.y = "Gene", all.x = T)  
+Rubisco_candidate <- merge.data.frame(Rubisco_candidate,seedling_mature_leaf[,c(1,12,24:28)], by.x = "Gene",by.y = "Gene", all.x = T)  
+Rubisco_candidate <- Rubisco_candidate[-grep("only",Rubisco_candidate$Accession),]
+
+Rubisco_candidate_arabidopsis <- Rubisco_candidate[,1:2]
+Rubisco_candidate_arabidopsis$arabidopsis_ID <- v4_annot[match(Rubisco_candidate_arabidopsis$Gene,v4_annot$v4_gene_model),"arabidopsis_ortholog"]
+Rubisco_candidate_arabidopsis <- merge.data.frame(Rubisco_candidate_arabidopsis,tmt_arabidopsis[,13:18], by.x = "arabidopsis_ID", by.y = "Gene", all.x = T)
+
+Rubisco_candidate_RNA <- Rubisco_candidate[,c(1:2,9:11)]
+Rubisco_candidate_RNA <- Rubisco_candidate_RNA[-which(duplicated(Rubisco_candidate_RNA$Gene)),]
+Rubisco_candidate_RNA <- na.omit(Rubisco_candidate_RNA)
+Rubisco_candidate_RNA[,3:5] <- Rubisco_candidate_RNA[,3:5]/Rubisco_candidate_RNA$B73
+
+Rubisco_candidate_protein <- Rubisco_candidate[,c(2,6:8)]
+Rubisco_candidate_protein <- na.omit(Rubisco_candidate_protein)
+Rubisco_candidate_protein[2:4] <- Rubisco_candidate_protein[,2:4]/Rubisco_candidate_protein$SeedlingLeaf.B73.mean
+
+Rubisco_candidate$HHP_RNA <- Rubisco_candidate$B73xMo17/Rubisco_candidate$B73
+Rubisco_candidate$HHP_protein <- Rubisco_candidate$SeedlingLeaf.BM.mean/Rubisco_candidate$SeedlingLeaf.B73.mean
+Rubisco_candidate_HHP <- Rubisco_candidate[,1:3]
+Rubisco_candidate_HHP <- merge.data.frame(Rubisco_candidate_HHP, seedling_mature_leaf[,c(1,3:11,25:28)], by.x = "Accession", by.y = "Accession", all.x = T)
+Rubisco_candidate$HP_protein <- pmax(Rubisco_candidate$SeedlingLeaf.B73.mean, Rubisco_candidate$SeedlingLeaf.Mo17.mean)
+Rubisco_candidate$HP_RNA <- pmax(Rubisco_candidate$B73,Rubisco_candidate$Mo17)
+Rubisco_candidate$HP_ID_protein <- "B73"
+Rubisco_candidate$HP_ID_RNA <- "B73"
+Rubisco_candidate_HHP <- na.omit(Rubisco_candidate_HHP)
+Rubisco_candidate_HHP[Rubisco_candidate_HHP$HP == Rubisco_candidate_HHP$SeedlingLeaf.Mo17.mean,"HP_ID"] <- "Mo17"
+Rubisco_candidate_HHP$HHP <- Rubisco_candidate_HHP$SeedlingLeaf.BM.mean/Rubisco_candidate_HHP$HP
+Rubisco_candidate_HHP$pval <- ""
+for (i in 1:nrow(Rubisco_candidate_HHP)){
+  Rubisco_candidate_HHP[i,"pval"] <- ttestFun(Rubisco_candidate_HHP[i,],c(grep(paste0(Rubisco_candidate_HHP[i,"HP_ID"],".r"),colnames(Rubisco_candidate_HHP))),10:12)
+  
+}
+
+Rubisco_candidate[,c("Symbol","HHP_RNA","HHP_protein")]
+
+Rubisco_protein_all <- merge.data.frame(Rubisco_candidate, protein_all_genotype[,c(1:26,40:69,96:105,159,166)], by.x = "Gene", by.y = "Gene", all.x = T)
+Rubisco_protein_all <- Rubisco_protein_all[-grep("only",Rubisco_protein_all$Accession),]
+write.csv(Rubisco_protein_all, "Rubisco_protein.csv")
+```
+#Correlation for Rubisco
+```{r}
+seedling_rubisco_cor <- data.frame(t(cor(t(Rubisco_candidate_HHP[1,4:6]), t(Rubisco_candidate_HHP[2:22,4:6]))))
+seedling_rubisco_cor <- cbind(seedling_rubisco_cor, data.frame(t(cor(t(Rubisco_candidate_HHP[1,7:9]), t(Rubisco_candidate_HHP[2:22,7:9])))))
+seedling_rubisco_cor <- cbind(seedling_rubisco_cor, data.frame(t(cor(t(Rubisco_candidate_HHP[1,10:12]), t(Rubisco_candidate_HHP[2:22,10:12])))))
+seedling_rubisco_cor$Symbol <- Rubisco_candidate_HHP[2:22,"Symbol"]
+colnames(seedling_rubisco_cor)[1:3] <- c("B73","Mo17","B73xMo17")
+seedling_rubisco_cor$Gene <- Rubisco_candidate_HHP[2:22,"Gene"]
+
+seedling_rubisco_cor <- cbind(seedling_rubisco_cor, data.frame(t(cor(t(Rubisco_candidate_HHP[1,4:12]), t(Rubisco_candidate_HHP[2:22,4:12])))))
+
+Rubisco_RNA_cor <- data.frame(t(cor(t(Rubisco_candidate_RNA[20,3:5]), t(Rubisco_candidate_RNA[c(1:19,21),3:5]))))
+Rubisco_RNA_cor <- cbind(Rubisco_RNA_cor, data.frame(t(cor(t(Rubisco_candidate_RNA[20,6:8]),t(Rubisco_candidate_RNA[c(1:19,21),6:8])))))
+Rubisco_RNA_cor <- cbind(Rubisco_RNA_cor, data.frame(t(cor(t(Rubisco_candidate_RNA[20,9:11]),t(Rubisco_candidate_RNA[c(1:19,21),9:11])))))
+
+
+Rubisco_candidate_RNA[,15:17] <- Rubisco_candidate_HHP[match(Rubisco_candidate_RNA$Gene,Rubisco_candidate_HHP$Gene),14:16]
+Rubisco_RNA_protein_cor <- data.frame(diag(cor(t(Rubisco_candidate_RNA[1:19,12:14]), t(Rubisco_candidate_RNA[1:19,15:17]))))
+Rubisco_RNA_protein_cor$Symbol <- Rubisco_candidate_RNA$Symbol
+
+Rubisco_candidate_arabidopsis <- merge.data.frame(Rubisco_candidate_arabidopsis,tmt_arabidopsis, by.x = "Arabidopsis_ID", by.y = "Gene", all.x = T)
+
+acs_B73_rubisco_cor <- data.frame(t(cor(t(Rubisco_protein_all[1,3:12]), t(Rubisco_protein_all[2:24,3:12]))))
+acs_B73_rubisco_cor <- cbind(acs_B73_rubisco_cor,t(cor(t(Rubisco_protein_all[1,8:12]), t(Rubisco_protein_all[2:24,8:12]))))
+acs_B73_rubisco_cor$Symbol <- Rubisco_protein_all[2:24,"Symbol"]
+
+
+```
+
+#client-chaperone correlation all genotype
+```{r}
+HMP_all_genotype <- read.csv("~/Desktop/Lab/Regulator story/test_candidate_gene/Protein_all_hybrid_HMP.csv")
+HMP_other <- read.csv("~/Downloads/Protein_HMP_other.csv")
+client_chaperone_HMP <- merge.data.frame(HMP_all_genotype[,1:17], HMP_other, by.x = "Accession",by.y = "Accession")
+client_chaperone_HMP <- merge.data.frame(client_chaperone_HMP,plastid_chaperone_client[,1:3], by.x = "Gene", by.y = "Gene", all.y = T)
+client_chaperone_HMP <- client_chaperone_HMP[-grep("only",client_chaperone_HMP$Accession),]
+client_chaperone_HMP <- client_chaperone_HMP[-grep("reverse",client_chaperone_HMP$Accession),]
+client_chaperone_HMP <- na.omit(client_chaperone_HMP)
+client_chaperone_HMP <- client_chaperone_HMP[-grep("DIV",client_chaperone_HMP$X6Hybrid.B73xMo17.Hyb.MP),]
+client_chaperone_HMP <- client_chaperone_HMP[-grep("DIV",client_chaperone_HMP$RIL.BM.MP),]
+client_chaperone_HMP <- client_chaperone_HMP[-grep("DIV",client_chaperone_HMP$Mature_leaf_HMP),]
+
+client_chaperone_HMP[,3:22] <- as.numeric(unlist(client_chaperone_HMP[,3:22]))
+GOI_mean_summary <- client_chaperone_HMP[,c(3:22,24)] %>% group_by(Category) %>% summarise(across(1:20,mean))
+GOI_mean_cor <- cor()
+
+HMP_all_protein <- merge.data.frame(HMP_all_genotype[,1:17], HMP_other, by.x = "Accession",by.y = "Accession")
+GOI_HMP <- merge.data.frame(HMP_all_protein, SL_GOIs, by.x = "Accession", by.y = "Accession")
+table(client_chaperone_HMP_2$Category)
+
+client_chaperone_HMP_2 <- client_chaperone_HMP_2[-which(duplicated(client_chaperone_HMP_2$Accession)),]
+client_chaperone_HMP_2[3:22] <- as.numeric(unlist(client_chaperone_HMP_2[3:22]))
+GOI_mean_summary <- data.frame(client_chaperone_HMP_2[,c(3:17,19:20,24)] %>% group_by(Category) %>% summarise(across(1:17,mean)))
+GOI_mean_summary[,2:18] <- as.numeric(unlist(GOI_mean_summary[,2:18]))
+GOI_mean_matrix <- data.frame(t(GOI_mean_summary))
+colnames(GOI_mean_matrix) <- GOI_mean_matrix[1,]
+GOI_mean_matrix <- GOI_mean_matrix[-1,]
+GOI_mean_matrix[,1:8] <- as.numeric(unlist(GOI_mean_matrix[,1:8]))
+
+GOI_mean_cor <- cor(GOI_mean_matrix[1:17,],GOI_mean_matrix[1:17,])
+GOI_mean_cor_pval <- corPvalueStudent(GOI_mean_cor,17)
+GOI_cor_PhANGs <- data.frame(t(cor(GOI_mean_matrix[1:16,6], t(HMP_all_protein[1:3464,c(2:16,19)]))))
+GOI_cor_PhANGs$Protein <- client_chaperone_HMP_2$Protein
+GOI_cor_PhANGs$Category <- client_chaperone_HMP_2$Category
+GOI_cor_PhANGs$Accession <- HMP_all_protein$Accession
+colnames(GOI_cor_PhANGs)[1] <- "Cor_PhANGs"
+GOI_cor_PhANGs_selected <- GOI_cor_PhANGs[GOI_cor_PhANGs$Cor_PhANGs >= 0.7,]
+
+GOI_cor_PhAPGs <- data.frame(t(cor(GOI_mean_matrix[1:16,7], t(HMP_all_protein[1:3464,c(2:16,19)]))))
+GOI_cor_PhAPGs$Protein <- client_chaperone_HMP_2$Protein
+GOI_cor_PhAPGs$Category <- client_chaperone_HMP_2$Category
+GOI_cor_PhAPGs$Accession <- HMP_all_protein$Accession
+colnames(GOI_cor_PhAPGs)[1] <- "Cor_PhAPGs"
+GOI_cor_PhAPGs_selected <- GOI_cor_PhAPGs[GOI_cor_PhAPGs$Cor_PhAPGs >= 0.7,]
+GOI_cor_client <- merge.data.frame(GOI_cor_PhANGs_selected,GOI_cor_PhAPGs_selected[,c(1,4)], by.x = "Accession",by.y = "Accession")
+GOI_cor_client <- GOI_cor_client[which(GOI_cor_client$Category == "PS assembly, stability and repair" | GOI_cor_client$Category == "Rubisco assembly"| GOI_cor_client$Category == "Chloroplast protein homeostasis"),]
+
+GOI_cor_client$Cor_heterosis <- protein_WGCNA[match(GOI_cor_client$Accession,protein_WGCNA$Accession),"G.S_height_protein"]
+
+GOI_client_candidate_protein <- merge.data.frame(GOI_cor_client,protein_all_genotype[, c(6,12:13,23:26,36:39,159)],by.x = "Accession", by.y = "Accession", all.x = T)
+
+GOI_cor_NEP <- data.frame(t(cor(GOI_mean_matrix[1:16,3], t(HMP_all_protein[1:3464,c(2:16,19)]))))
+GOI_cor_NEP$Protein <- protein_WGCNA[match(GOI_cor_NEP$Accession,protein_WGCNA$Accession),"Protein"]
+GOI_cor_NEP$Category <- SL_GOIs[match(GOI_cor_NEP$Accession,SL_GOIs$Accession),"Category"]
+GOI_cor_NEP$Accession <- HMP_all_protein$Accession
+colnames(GOI_cor_NEP)[1] <- "Cor_NEP"
+GOI_cor_NEP_selected <- GOI_cor_NEP[GOI_cor_NEP$Cor_NEP >= 0.7,]
+
+GOI_cor_PEP <- data.frame(t(cor(GOI_mean_matrix[1:16,4], t(HMP_all_protein[1:3464,c(2:16,19)]))))
+GOI_cor_PEP$Accession <- HMP_all_protein$Accession
+colnames(GOI_cor_PEP)[1] <- "Cor_PEP"
+GOI_cor_PEP_selected <- GOI_cor_PEP[GOI_cor_PEP$Cor_PEP >= 0.7,]
+
+NEP_PEP <- intersect(GOI_cor_NEP_selected$Accession,GOI_cor_PEP_selected$Accession)
+PhANPGs <- intersect(GOI_cor_PhANGs_selected$Accession, GOI_cor_PhAPGs_selected$Accession)
+candidate_select <- data.frame(intersect(NEP_PEP,PhANPGs))
+colnames(candidate_select)[1] <- "Accession"
+candidate_select$Protein <- protein_WGCNA[match(candidate_select$Accession,protein_WGCNA$Accession),"Protein"]
+
+GOI_client_candidate_protein$G.S_height <- protein_WGCNA[match(GOI_client_candidate_protein$Accession, protein_WGCNA$Accession),"G.S_height_protein"]
+GOI_client_candidate_protein$module <- protein_WGCNA[match(GOI_client_candidate_protein$Accession, protein_WGCNA$Accession),"moduleColors_protein"]
+GOI_client_candidate_protein_selected <- GOI_client_candidate_protein[GOI_client_candidate_protein$module == "blue",c("Protein","G.S_height")]
+OHP_HCF <- assembly_HMP[assembly_HMP$Protein == "OHP1" | assembly_HMP$Protein == "OHP2",c(1,4:7)]
+OHP_HCF <- rbind(OHP_HCF, assembly_MP_RNA_AMP_protein[assembly_MP_RNA_AMP_protein$Protein == "HCF244",c(1,3:6)])
+OHP_HCF$Accession <- OHP_HCF_accession
+OHP_HCF <- cbind(OHP_HCF,seedling_mature_leaf[which(seedling_mature_leaf$Accession %in% OHP_HCF$Accession),c("SeedlingLeaf.B73.mean","SeedlingLeaf.Mo17.mean","SeedlingLeaf.BM.mean")])
+which(seedling_mature_leaf$Accession %in% OHP_HCF$Accession)
+
+cbind(OHP_HCF$Protein,cpm.SL[cpm.SL$Gene %in% OHP_HCF$Gene, c("B73","Mo17","B73xMo17")],seedling_mature_leaf[which(seedling_mature_leaf$Accession %in% OHP_HCF$Accession),c("SeedlingLeaf.B73.mean","SeedlingLeaf.Mo17.mean","SeedlingLeaf.BM.mean")])
+```
+
+#Alternative splicing
+```{r}
+AS_hybrid <- read.csv("~/Downloads/AS_novel_hybrid.csv", header = F, stringsAsFactors = F)
+AS_hybrid$sdl_HMP <- protein_all_genotype[match(AS_hybrid$V2, protein_all_genotype$Gene),"Seedling_leaf_HMP"]
+AS_hybrid <- merge.data.frame(AS_hybrid, SL_GOIs, by.x = "V2", by.y = "Gene", all.x = T)
+```
+
+
+
+
+
+#find overlap of nonadditive and proteome dominance
+```{r}
+
+Category_PD_all <- data.frame(matrix(ncol = 16,nrow = 0)) 
+
+colnames(Category_PD_all) <- c("Accession", "HMP","HMP_pval", "HP", "LP", "HHP", "HLP", "HHP_pval", "HLP_pval","B73Mo17","B73Mo17_pval", "P_category", "Category_AD", "PD_category", "all_category","Tissue")
+
+for (i in 1:length(Tissues)){
+  
+  tissue <- Tissues[i]
+  
+  df <- Tissues_full_HP_PD[,c(1, grep(tissue, colnames(Tissues_full_HP_PD)))]
+  
+  df <- na.omit(df)
+  
+  df$all_category <- "Z"
+    
+  
+  df$Tissue <- tissue
+  
+  
+  colnames(df) <- colnames(Category_PD_all)
+  
+  Dominance <- c("HP_dominant","LP_dominant","AHP_overdominant","BLP_overdominant")
+  
+  df[which(df$Category_AD %in% Dominance  & df$P_category == "NonDE"), "all_category"] <- "(Over) Dominance only"
+  
+  df[which(df$Category_AD == "Additive"  & df$P_category != "NonDE"), "all_category"] <- "DE only"
+  
+  df[which(df$PD_category == "PD"), "all_category"] <- "PD"
+  
+  #nonad_Mo17_D <- df[which(df[,grep("HYB_category",colnames(df))] == "Nonadditive" & df[,grep("P_category", colnames(df))] == "Mo17_D"),]
+  
+ # nonadd_D <- rbind(nonad_B73_D, nonad_Mo17_D)
+  
+  
+  #colnames(nonadd_D) <- c("Accession", "HYB","l2_HMP", "l2_HMP_pval", "B73Mo17", "l2_P", "l2_P_pval", "HMP_category", "P_category")
+  
+  #df$Tissue <- tissue
+  
+  Category_PD_all <- rbind(Category_PD_all, df)
+  
+}
+```
+
+#Nonadd count
+```{r}
+
+Nonadd_D_count <- data.frame(Nonadd_D_all %>% group_by(Tissue, P_category) %>% tally())
+
+Nonadd_D_count$Type <- "Nonadditive"
+
+PD_count <- hybrid_tissue_count[grep("_D",hybrid_tissue_count$Category),c("Tissue","Category","Count")]
+PD_count$n <- as.numeric(PD_count$Count) - as.numeric(Nonadd_D_count$n)
+PD_count$Type <- "Additive"
+colnames(PD_count)[2] <- "P_category"
+
+Nonadd_D_count <- rbind(Nonadd_D_count, PD_count[,c("Tissue","P_category","n","Type")])
+Nonadd_D_count <- Nonadd_D_count[order(Nonadd_D_count$Tissue),]
+Nonadd_D_count$percent_detected <- as.numeric(Nonadd_D_count$n)/rep(as.numeric(hybrid_tissue_count[grep("Detected",hybrid_tissue_count$Category),"Count"]), each = 4)
+
+ggplot(PD_count_input, aes(Tissue, n , fill = Type)) +
+  #geom_bar(aes(Tissue, n, fill = Type),stat = "identity", position = "stack") +
+ # geom_bar_pattern(stat = "identity", position = position_stack())+
+  geom_bar(stat = "identity", position = "stack")+
+  geom_text(aes(label = n, color = Type), size = 2, position = position_stack(vjust = 0.5))+
+ theme(strip.text = element_text(face = "bold")) +
+ # scale_fill_manual(values = c("Z" = "green", "PD" = "darkgray", "DE" = "lightblue"))+
+  #scale_pattern_manual(values = c("Z" = NA, "PD" = "stripe", DE = NA))+
+  scale_fill_brewer(palette = "Dark2", label = c("Differential Expression Only","Proteome Dominance","(Over) Dominance Only"))+
+  scale_color_manual(values = c("DE" = "000000AA#", "PD" = "white", "Z" = "000000AA#"))+
+  xlab("")+
+
+  ylab("Protein count")+
+#expand_limits(y = 0)+
+  #facet_grid(~Tissue) + 
+  theme_bw()+
+   #theme(panel.border = element_blank())+
+  #theme(strip.text =element_text(angle = 70, size = 7, color = "black"), strip.background = element_rect(fill = "lightblue"), panel.background = element_rect(fill = "white"))+ theme(panel.grid = element_blank())+
+ theme(legend.position = "top", legend.text = element_text(size = 7, color = "black"), legend.title = element_text(color = "white"), legend.box.spacing = unit(0, "cm"), legend.spacing = unit(0,'cm')) +theme(axis.text = element_text(size = 9, color = "black")) +
+  theme(axis.text= element_text(hjust = 1))+
+  theme(plot.margin = margin(4,2,1,1, "mm"), axis.title = element_text(color = "black", size = 11))+
+   guides(color = FALSE)+
+  scale_y_continuous(limits = c(0,3000), expand = c(0,0))+
+  coord_flip()
+```
+
+#clustering
+```{r}
+protein_network_HMP_scaled <- protein_network_HMP
+protein_network_HMP_scaled[protein_network_HMP_scaled > log2(8)] <- log2(8)
+protein_network_HMP_scaled[protein_network_HMP_scaled < log2(0.125)] <- log2(0.125)
+colnames(protein_network_HMP_scaled) <- gsub("_l2_HMP","", colnames(protein_network_HMP_scaled))
+
+#PCA
+tissue_all_pca <- prcomp(t(protein_network_HMP_scaled))
+summary(tissue_all_pca)
+fviz_pca_ind(tissue_all_pca)
+tissue_all_pca$x
+fviz_eig(tissue_all_pca, addlabels = T)
+
+tissue_pca_var <- get_pca_var(tissue_all_pca)
+var_contrib <- data.frame(tissue_pca_var$contrib)
+var_contrib <- var_contrib[order(var_contrib$Dim.4, decreasing = T),]
+dim_1_top200 <- data.frame(var_contrib[1:100,])
+dim_1_top200$Gene <- substr(rownames(dim_1_top200), start = 1, stop = 14)
+#pca_gamer <- gamer[gamer$db_object_id %in% Tissues_full_HP_PD$Gene,]
+dim_1_top200_GO <- merge_module_GO(dim_1_top200, pca_gamer, nodesize = 10)
+dim_2_top200_GO <- merge_module_GO(dim_1_top200, pca_gamer, nodesize = 10)
+dim_3_top200_GO <- merge_module_GO(dim_1_top200, pca_gamer, nodesize = 10)
+dim_4_top200_GO <- merge_module_GO(dim_1_top200, pca_gamer, nodesize = 10)
+
+#heatmap
+heatmap.2(binned_rank[1:10,], Rowv = T, Colv = F, trace = "none", density.info = "none", cexRow = 0.8,  key.xlab = "", labCol = NA, dendrogram = "row")
+
+
+heatmap(binned_rank[1:10, ], cexRow = 0.5, col = brewer.pal(n = 7, "Blues"))
+
+```
+
+```{r}
+rep_col <- NULL
+for (i in 1:length(Tissues_ordered)){
+  rep_new <- rep(Tissues_ordered[i],9)
+  rep_col <- append(rep_col, rep_new)
+}
+
+colnames(Tissue_tmt_mean)[2:181] <- paste0(rep_col, "_" ,rep(tmt_index,9))
+```
+#venn diagram
+```{r}
+DE_tissue_all <- NA
+
+for (i in 1:length(Tissues)){
+  HHP_df <- Tissue_full_PD[,c(1,grep(paste0(Tissues[i], '_l2_B73Mo17'), colnames(Tissue_full_PD)))]
+  colnames(HHP_df) <- c("Accession","l2_B73Mo17")
+  HHP_df$Tissue <- Tissues[i]
+  DE_tissue_all <- data.frame(rbind(DE_tissue_all, HHP_df))
+}
+
+HHP_tissue_all <- na.omit(HHP_tissue_all)
+HHP_tissue_all <- HHP_tissue_all[HHP_tissue_all$HHP >= 1,]
+HHP_tissue_all$Type_1 <- "D/OD"
+HHP_tissue_all$Type_2 <- "HP/AHP"
+colnames(HHP_tissue_all)[2] <- "Value"
+
+HLP_tissue_all <- na.omit(HLP_tissue_all)
+HLP_tissue_all <- HLP_tissue_all[HLP_tissue_all$HLP <= 1,]
+HLP_tissue_all$Type_1 <- "D/OD"
+HLP_tissue_all$Type_2 <- "LP/BLP"
+colnames(HLP_tissue_all)[2] <- "Value"
+
+DE_tissue_all <- na.omit(DE_tissue_all)
+DE_tissue_all <- DE_tissue_all[abs(DE_tissue_all$l2_B73Mo17) >= log2(1.25),]
+
+DE_tissue_all <- DE_tissue_all[-grep("Inf",DE_tissue_all$l2_B73Mo17),]
+DE_tissue_all$Type_1 <- "DE"
+DE_tissue_all$Type_2 <- "B73_HP"
+DE_tissue_all[which(DE_tissue_all$l2_B73Mo17 < 0), "Type_2"] <- "Mo17_HP"
+colnames(DE_tissue_all)[2] <- "Value"
+
+Venn_input %>% group_by(Tissue) %>% mutate(overlap = any(duplicated(Accession))) %>% summarise(sum = sum(overlap))
+
+Venn_input <- rbind(HHP_tissue_all, HLP_tissue_all, DE_tissue_all)
+
+Venn_tissue_in <- Venn_input[Venn_input$Tissue == Tissues[1],]
+
+ggVennDiagram(list('DE' = Venn_tissue_in$Accession, 'D/OD' = Venn_tissue_in[Venn_tissue_in$Type_1 == "D/OD","Accession"]), label_alpha = 0, label_size = 4, edge_size = 0, set_size = 4) +
+    scale_fill_gradient(low = "lightblue", high = "orange") +
+  scale_x_continuous(expand = expansion(mult = .2))
+```
+
+#Functional enrichment PD
+```{r}
+
+PD_all <- Tissues_all_categories[Tissues_all_categories$PD_category == "PD",]
+
+Tissues_all_categories %>% group_by(Tissue, Category_AD, PD_category, P_category) %>% tally()
+
+PD_repeat <- data.frame(table(PD_all$Gene))
+
+Dominant_only <- Category_PD_all[Category_PD_all$all_category == "(Over) Dominance only",]
+
+table(Dominant_only$Tissue)
+
+```
+#scatter proteome dominance
+```{r}
+#test <- sdl_scatter[sdl_scatter$PD_category != "Z", ]
+
+#Category_PD_all[,c(2,3,6:11)] <- as.numeric(unlist(Category_PD_all[,c(2,3,6:11)]))
+scat <- ggplot(test, aes(test$Endo14_l2_HMP, test$Endo14_l2_B73Mo17, color = test$PD_category))+
+  
+  geom_point(size = 2.1, shape = 1) +
+ # geom_point(size = 2.5, shape = 1) +
+  #FFEBCD
+ scale_color_manual(values = c("Parents Differential Expression Only" = "#1B9E77", "Proteome Dominance" = "#D95F02", "Hybrid Dominance Only" = "#7570B3"),
+                    labels = c("Hybrid Dominance Only (408)","Parents Differential Expression Only (1022)","Proteome Dominance (306)"))+
+  #scale_color_manual(values = c("PhANGs" = "limegreen", "Cytosolic ribosome" = "orangered", "NE plastid ribosome" = "darkmagenta", "Chloroplast protein homeostasis" = "blue", "Photosynthesis machinery assembly" = "yellow", "PE plastid ribosome" = "pink","PhAPGs" = "darkgreen", "All other (PD, D & DE)" = "darkgray"))+
+  theme_linedraw()+
+  xlab("Log2 B73xMo17/MP")+
+ylab("Log2 B73/Mo17")+
+      geom_vline(xintercept=0, linetype="solid", color = "gray40", size=0.2)+
+      geom_hline(yintercept= 0, linetype="solid", color = "gray40", size=0.2)+
+  
+  geom_segment(aes(x = log2(1.25), y = -2, xend = log2(1.25), yend = 2), color = "gray", size = 0.5, linetype = "dashed")+
+  
+    geom_segment(aes(x = log2(0.8), y = -2, xend = log2(0.8), yend = 2), color = "gray", size = 0.5, linetype = "dashed")+
+  
+    geom_segment(aes(x = -2, y = log2(0.8), xend = 2, yend = log2(0.8)), color = "gray", size = 0.5, linetype = "dashed")+
+  
+    geom_segment(aes(x = -2, y = log2(1.25), xend = 2, yend = log2(1.25)), color = "gray", size = 0.5, linetype = "dashed")+
+  
+xlim(-2,2)+
+  ylim(-2,2)+
+  #geom_hline(yintercept = -log10(0.01), linetype = "dashed", color = "red", size = 0.2)+
+  theme(legend.title = element_blank(), legend.text = element_text(size = 7, color = "black"), legend.box.spacing = unit(0,"cm"))+
+    theme(plot.margin = margin(6,10,10,4, "mm"), plot.title = element_text(hjust = 0.5, size = 12), axis.title = element_text(size = 9, colour = "black"), axis.text = element_text(color = "black", size = 8))+
+coord_fixed()
+
+      #geom_rect(data = background_D, mapping = aes(xmin = xlow, xmax = xhigh, ymin = ylow, ymax = yhigh, fill = "mediumpurple"), alpha = 0.2, show.legend = FALSE)+
+
+
+  
+   # geom_rect(data = background, mapping = aes(xmin = xlow, xmax = xhigh, ymin = ylow, ymax = yhigh, fill = "gold"), alpha = 0.3, show.legend = FALSE) +
+  
+    # geom_rect(data = background_DE, mapping = aes(xmin = xlow, xmax = xhigh, ymin = ylow, ymax = yhigh, fill = "seagreen"), alpha = 0.2, show.legend = FALSE) +
+  
+  
+  #  geom_rect(data = background_DE, mapping = aes(xmin = xlow, xmax = xhigh, ymin = ylow, ymax = yhigh, fill = "#1B9E77"), alpha = 0.3, show.legend = FALSE) +
+  
+    #geom_text(label = "PD", x = -1, y = 1,show.legend = FALSE, color = "gray20", size = 4)+
+  #geom_text(label = "PD", x = 1, y = 1,show.legend = FALSE, color = "gray20", size = 4)+
+  #geom_text(label = "PD", x = -1, y = -1,show.legend = FALSE, color = "gray20", size = 4)+
+  #geom_text(label = "PD", x = 1, y = -1,show.legend = FALSE, color = "gray20", size = 4)+
+  #geom_text(label = "D", x = 1.3, y = 0,show.legend = FALSE, color = "gray20", size = 4)+
+   #geom_text(label = "D", x = -1.3, y = 0,show.legend = FALSE, color = "gray20", size = 4)+
+   #geom_text(label = "DE", x = 0, y = 1.3,show.legend = FALSE, color = "gray20", size = 4)+
+     #geom_text(label = "DE", x = 0, y = -1.3,show.legend = FALSE, color = "gray20", size = 4)
+  
+
+  #xlow = c(-1.5,log2(1.25), -1.5, log2(1.25))
+  #xhigh = c(-log2(1.25), 1.5, -log2(1.25), 1.5)
+  #ylow = c(-1.5, log2(1.25), -1.5, log2(1.25))
+  #yhigh = c(-log2(1.25), 1.5, -log2(1.25), 1.5)
+  #ggtitle("Auricle")
+```
+
+```{r}
+background <- data.frame( xlow = c(-1.5,log2(1.25), -1.5, log2(1.25)),
+  xhigh = c(-log2(1.25), 1.5, -log2(1.25), 1.5),
+  ylow = c(-1.5, log2(1.25), log2(1.25), -1.5),
+  yhigh = c(-log2(1.25), 1.5, 1.5, -log2(1.25)))
+
+background_DE <- data.frame(xlow = -log2(1.25), xhigh = log2(1.25), ylow = c(-1.5, log2(1.25)) , yhigh = c(-log2(1.25), 1.5))
+
+background_D <- data.frame(xlow = c(-1.5, log2(1.25)), xhigh = c(-log2(1.25), 1.5), ylow = -log2(1.25), yhigh = log2(1.25))
+```
+
+
+#scatter overlay with proteins of interest
+```{r}
+scat <- ggplot(test, aes(test$Endo14_l2_HMP, test$Endo14_l2_B73Mo17, color = test$PD_category))+
+  
+  geom_point(size = 2.1, shape = 1) +
+ # geom_point(size = 2.5, shape = 1) +
+  #FFEBCD
+ scale_color_manual(values = c("Parents Differential Expression Only" = "#1B9E77", "Proteome Dominance" = "#D95F02", "Hybrid Dominance Only" = "#7570B3"),
+                    labels = c("Hybrid Dominance Only (408)","Parents Differential Expression Only (1022)","Proteome Dominance (306)"))+
+  #scale_color_manual(values = c("PhANGs" = "limegreen", "Cytosolic ribosome" = "orangered", "NE plastid ribosome" = "darkmagenta", "Chloroplast protein homeostasis" = "blue", "Photosynthesis machinery assembly" = "yellow", "PE plastid ribosome" = "pink","PhAPGs" = "darkgreen", "All other (PD, D & DE)" = "darkgray"))+
+  theme_linedraw()+
+  xlab("Log2 B73xMo17/MP")+
+ylab("Log2 B73/Mo17")+
+      geom_vline(xintercept=0, linetype="solid", color = "gray40", size=0.2)+
+      geom_hline(yintercept= 0, linetype="solid", color = "gray40", size=0.2)+
+  
+  geom_segment(aes(x = log2(1.25), y = -2, xend = log2(1.25), yend = 2), color = "gray", size = 0.5, linetype = "dashed")+
+  
+    geom_segment(aes(x = log2(0.8), y = -2, xend = log2(0.8), yend = 2), color = "gray", size = 0.5, linetype = "dashed")+
+  
+    geom_segment(aes(x = -2, y = log2(0.8), xend = 2, yend = log2(0.8)), color = "gray", size = 0.5, linetype = "dashed")+
+  
+    geom_segment(aes(x = -2, y = log2(1.25), xend = 2, yend = log2(1.25)), color = "gray", size = 0.5, linetype = "dashed")+
+  
+xlim(-2,2)+
+  ylim(-2,2)+
+  #geom_hline(yintercept = -log10(0.01), linetype = "dashed", color = "red", size = 0.2)+
+  theme(legend.title = element_blank(), legend.text = element_text(size = 7, color = "black"), legend.box.spacing = unit(0,"cm"))+
+    theme(plot.margin = margin(6,10,10,4, "mm"), plot.title = element_text(hjust = 0.5, size = 12), axis.title = element_text(size = 9, colour = "black"), axis.text = element_text(color = "black", size = 8))+
+coord_fixed()
+
+      #geom_rect(data = background_D, mapping = aes(xmin = xlow, xmax = xhigh, ymin = ylow, ymax = yhigh, fill = "mediumpurple"), alpha = 0.2, show.legend = FALSE)+
+
+
+  
+   # geom_rect(data = background, mapping = aes(xmin = xlow, xmax = xhigh, ymin = ylow, ymax = yhigh, fill = "gold"), alpha = 0.3, show.legend = FALSE) +
+  
+    # geom_rect(data = background_DE, mapping = aes(xmin = xlow, xmax = xhigh, ymin = ylow, ymax = yhigh, fill = "seagreen"), alpha = 0.2, show.legend = FALSE) +
+  
+  
+  #  geom_rect(data = background_DE, mapping = aes(xmin = xlow, xmax = xhigh, ymin = ylow, ymax = yhigh, fill = "#1B9E77"), alpha = 0.3, show.legend = FALSE) +
+  
+    #geom_text(label = "PD", x = -1, y = 1,show.legend = FALSE, color = "gray20", size = 4)+
+  #geom_text(label = "PD", x = 1, y = 1,show.legend = FALSE, color = "gray20", size = 4)+
+  #geom_text(label = "PD", x = -1, y = -1,show.legend = FALSE, color = "gray20", size = 4)+
+  #geom_text(label = "PD", x = 1, y = -1,show.legend = FALSE, color = "gray20", size = 4)+
+  #geom_text(label = "D", x = 1.3, y = 0,show.legend = FALSE, color = "gray20", size = 4)+
+   #geom_text(label = "D", x = -1.3, y = 0,show.legend = FALSE, color = "gray20", size = 4)+
+   #geom_text(label = "DE", x = 0, y = 1.3,show.legend = FALSE, color = "gray20", size = 4)+
+     #geom_text(label = "DE", x = 0, y = -1.3,show.legend = FALSE, color = "gray20", size = 4)
+  
+
+  #xlow = c(-1.5,log2(1.25), -1.5, log2(1.25))
+  #xhigh = c(-log2(1.25), 1.5, -log2(1.25), 1.5)
+  #ylow = c(-1.5, log2(1.25), -1.5, log2(1.25))
+  #yhigh = c(-log2(1.25), 1.5, -log2(1.25), 1.5)
+  #ggtitle("Auricle")
+
+```
+
+#density x
+```{r}
+#x axis positive
+densityplotX_P<- axis_canvas(scat, axis="x")+
+      geom_density(aes(test[which(test$PD_category %in% selected_category_x & test$Endo14_l2_B73Mo17 >0 & abs(test$Endo14_l2_HMP) > log2(1.25)), "Endo14_l2_HMP"], color = test[which(test$PD_category %in% selected_category_x & test$Endo14_l2_B73Mo17 >0 & abs(test$Endo14_l2_HMP) > log2(1.25)), "PD_category"]), size=0.6, outline.type = "upper")+
+   
+   scale_color_manual(values=c("Proteome Dominance" = "#D95F02", "Hybrid Dominance Only" = "#7570B3"))+
+  #scale_color_manual(values = c("Proteome Dominance" = "#D95F02", "PhANGs" = "darkgreen", "Chloroplast protein homeostasis" = "red", "Photosynthesis machinery assembly" = "blue", "NE plastid ribosome" = "purple", "PhAPGs" = "lightgreen", "PE plastid ribosome" = "pink", "Cytosolic ribosome" = "brown"))+
+      geom_vline(xintercept=0, linetype="solid", color = "gray50")+
+      theme_void() 
+ # coord_cartesian()
+
+#x axis negative 
+densityplotX_N <- axis_canvas(scat, axis="x")+
+         geom_density(aes(test[which(test$PD_category %in% selected_category_x & test$Endo14_l2_B73Mo17 <0 & abs(test$Endo14_l2_HMP) > log2(1.25)), "Endo14_l2_HMP"], color = test[which(test$PD_category %in% selected_category_x & test$Endo14_l2_B73Mo17 <0 & abs(test$Endo14_l2_HMP) > log2(1.25)), "PD_category"]), size=0.6, outline.type = "upper")+
+   scale_color_manual(values=c("Proteome Dominance" = "#D95F02", "Hybrid Dominance Only" = "#7570B3"))+
+  #scale_color_manual(values = c("Proteome Dominance" = "#D95F02", "PhANGs" = "darkgreen", "Chloroplast protein homeostasis" = "red", "Photosynthesis machinery assembly" = "blue", "NE plastid ribosome" = "purple", "PhAPGs" = "lightgreen", "PE plastid ribosome" = "pink", "Cytosolic ribosome" = "brown"))+
+      geom_vline(xintercept=0, linetype="solid", color = "gray50")+
+      theme_void()+
+ scale_y_reverse()
+  #coord_cartesian()
+
+
+    #set up marginal density plot Y axis
+    
+#y axis positive 
+    densityplotY_P <- axis_canvas(scat, axis="y", coord_flip = T)+
+         geom_density(aes(test[which(test$PD_category %in% selected_category_y & test$Endo14_l2_HMP > 0 & abs(test$Endo14_l2_HMP) > log2(1.25)), "Endo14_l2_B73Mo17"], color = test[which(test$PD_category %in% selected_category_y & test$Endo14_l2_HMP > 0 & abs(test$Endo14_l2_HMP) > log2(1.25)), "PD_category"]), size=0.6, outline.type = "upper")+
+         scale_color_manual(values=c("Parents Differential Expression Only" = "#1B9E77", "Proteome Dominance" = "#D95F02"))+
+      #scale_linetype_manual(values=c("dotted", "solid"))+
+         #scale_color_manual(values = c("Proteome Dominance" = "#D95F02", "PhANGs" = "darkgreen", "Chloroplast protein homeostasis" = "red", "Photosynthesis machinery assembly" = "blue", "NE plastid ribosome" = "purple", "PhAPGs" = "lightgreen", "PE plastid ribosome" = "pink", "Cytosolic ribosome" = "brown"))+
+      geom_vline(xintercept=0, linetype="solid", color = "gray50")+
+      theme_void()+
+      coord_flip()
+    
+    #y axis negative 
+        densityplotY_N <- axis_canvas(scat, axis="y", coord_flip = T)+
+    geom_density(aes(test[which(test$PD_category %in% selected_category_y & test$Endo14_l2_HMP < 0 & abs(test$Endo14_l2_HMP) > log2(1.25)), "Endo14_l2_B73Mo17"], color = test[which(test$PD_category %in% selected_category_y & test$Endo14_l2_HMP < 0 & abs(test$Endo14_l2_HMP) > log2(1.25)), "PD_category"]), size=0.6, outline.type = "upper")+
+         scale_color_manual(values=c("Parents Differential Expression Only" = "#1B9E77", "Proteome Dominance" = "#D95F02"))+
+      #scale_linetype_manual(values=c("dotted", "solid"))+
+          # scale_color_manual(values = c("Proteome Dominance" = "#D95F02", "PhANGs" = "darkgreen", "Chloroplast protein homeostasis" = "red", "Photosynthesis machinery assembly" = "blue", "NE plastid ribosome" = "purple", "PhAPGs" = "lightgreen", "PE plastid ribosome" = "pink", "Cytosolic ribosome" = "brown"))+
+      geom_vline(xintercept=0, linetype="solid", color = "gray50")+
+
+          coord_flip()+
+      theme_void()+
+           scale_y_reverse()
+     # coord_flip() 
+          
+         
+       
+        
+        
+    #put plots together
+    a <- insert_xaxis_grob(scat, densityplotX_P, grid::unit(0.3, "null"), position = "top")
+    b <- insert_xaxis_grob(a, densityplotX_N, grid::unit(0.3, "null"), position = "bottom")
+    c <- insert_yaxis_grob(b, densityplotY_P, grid::unit(0.4, "null"), position = "right")
+    d <- insert_yaxis_grob(c, densityplotY_N, grid::unit(0.3, "null"), position = "left")
+
+      
+    
+  
+
+```
+
+#save plot
+```{r}
+print(q)
+ggsave(plot = d, filename = "TASSEL_PD_scatter_density.png")
+ggsave(plot = scat, filename = "sdl_PD_GOI_scatter.png")
+```
+
+
+#GOI heatmap
+```{r}
+GOI <- SL_GOIs[SL_GOIs$Category %in% GOI_selected, "Gene"]
+protein_network_HMP$Gene <- substr(rownames(protein_network_HMP))
+
+```
+#RNA to protein ratio
+```{r}
+protein_cor_input_6H_all <- protein_all_genotype[,c(40:69,159,165,166)]
+
+
+protein_cor_input_6H <- protein_cor_input_6H_all[,c(1:31)]
+
+protein_cor_input_6H <- protein_cor_input_6H[-which(rowSums(protein_cor_input_6H[,1:10]) == 0),]
+protein_cor_input_6H <- protein_cor_input_6H[-which(rowSums(protein_cor_input_6H[,11:20]) == 0),]
+protein_cor_input_6H <- protein_cor_input_6H[-which(rowSums(protein_cor_input_6H[,21:30]) == 0),]
+protein_cor_input_6H <- protein_cor_input_6H[-grep("only", protein_cor_input_6H$Accession),]
+protein_cor_input_6H <- protein_cor_input_6H[-grep("reverse", protein_cor_input_6H$Accession),]
+
+colnames(protein_cor_input_6H) <- gsub("X6Hybrid.","", colnames(protein_cor_input_6H))
+colnames(protein_cor_input_6H) <- gsub(".r","_r", colnames(protein_cor_input_6H))
+protein_cor_input_6H$Gene <- substr(protein_cor_input_6H$Accession, start = 1, stop = 14)
+
+protein_cor_input_RIL <- read.csv("Protein_RIL_all.csv", header = T, stringsAsFactors = F)
+
+protein_cor_input_RIL <- protein_cor_input_RIL[,2:17]
+
+protein_cor_input_RIL <- protein_cor_input_RIL[-which(rowSums(protein_cor_input_RIL[,2:16]) == 0),]
+
+protein_cor_input <- merge.data.frame(protein_cor_input_6H, protein_cor_input_RIL, by = "Accession")
+
+protein_cor_input <- protein_cor_input[-grep("only", protein_cor_input$Accession),]
+
+protein_cor_input <- protein_cor_input[-grep("reverse", protein_cor_input$Accession),]
+
+protein_cor_input_na <- na.omit(protein_cor_input)
+
+#protein_cor_input_na <- protein_cor_input_na[-which(rowSums(protein_cor_input_na[,2:26]) == 0),]
+
+protein_cor_input_na$Gene <- substr(protein_cor_input_na$Accession, start = 1, stop = 14)
+
+
+
+RNA_cor_input <- read.csv("cpm.6H_011722.csv", header = T, stringsAsFactors = F)
+RNA_cor_input <- RNA_cor_input[,1:31]
+RNA_cor_input <- RNA_cor_input[,c(1,2,5,8,11,14,17,20,23,26,29,3,6,9,12,15,18,21,24,27,30,4,7,10,13,16,19,22,25,28,31)]
+
+colnames(RNA_cor_input)[2:31] <- colnames(protein_cor_input_6H)[1:30]
+
+RNA_protein_cor <- merge.data.frame(RNA_cor_input, protein_cor_input_6H, by = "Gene")
+
+#RNA_protein_cor <- RNA_protein_cor[-which(duplicated(RNA_protein_cor$B73_r3.y)),]
+
+#RNA_protein_cor <- RNA_protein_cor[-which(rowSums(RNA_protein_cor[,32:41]) ==0),]
+
+write.csv(RNA_protein_cor, "RNA_protein_ratio_input.csv")
+
+RNA_protein_ratio <- RNA_protein_cor[,32:61]/RNA_protein_cor[,2:31]
+
+
+
+RNA_protein_ratio$Accession <- RNA_protein_cor$Accession
+RNA_protein_ratio$Gene <- substr(RNA_protein_ratio$Accession, start = 1, stop = 14)
+
+#RNA_protein_ratio <- merge.data.frame(RNA_protein_ratio, protein_all_genotype[,c("Gene","Protein")], by.x = "Gene", by.y = "Gene", all.x = T)
+
+#RNA_protein_ratio <- RNA_protein_ratio[-which(duplicated(RNA_protein_ratio$Gene)),]
+
+write.csv(RNA_protein_ratio, "RNA_protein_ratio_6H.csv")
+```
+
+#PCA for protein-RNA ratio
+```{r}
+RP_ratio_6H <- RNA_protein_ratio[,1:11]
+
+#remove proteins with all zeros
+RP_ratio_6H_selected <- RP_ratio_6H[-which(rowSums(RP_ratio_6H[,2:11]) == 0),]
+
+RP_ratio_6H_selected$Gene <- substr(RP_ratio_6H_selected$Accession, start = 1, stop = 14)
+
+RP_ratio_6H <- t(RP_ratio_6H_selected[,2:11])
+
+colnames(RP_ratio_6H) <- RP_ratio_6H_selected$Accession
+
+RP_ratio_6H[,1:6216] <- as.numeric(RP_ratio_6H[,1:6216])
+
+#mean center
+RP_ratio_6H_normalized<- scale(RP_ratio_6H, scale = T)
+
+
+
+RNA_protein_ratio_normalize <- RNA_protein_ratio[,2:27]
+RNA_protein_ratio_normalize[RNA_protein_ratio_normalize == 0] <- NA
+RNA_protein_ratio_normalize[is.na(RNA_protein_ratio_normalize)] <- 0.00000001
+
+
+RNA_protein_ratio_normalize[,1:10] <- RNA_protein_ratio_normalize[,1:10]/RNA_protein_ratio_normalize$sixhybrid_B73
+
+RNA_protein_ratio_normalize[,11:25] <- RNA_protein_ratio_normalize[,11:25]/RNA_protein_ratio_normalize$RIL_B73
+
+
+
+RP_ratio_6H_pca <- prcomp(binned_rank_6H)
+
+summary(RP_ratio_6H_pca)
+
+fviz_eig(RP_ratio_6H_pca, addlabels = T, barfill = "white", barcolor = "darkblue", linecolor = "salmon")+
+    theme_classic()+
+  labs(title = "Variances - PCA",
+         x = "Principal Components", y = "% of variances")
+  
+
+  fviz_pca_var(RP_ratio_6H_pca, labelsize = 3, axes = c(1,2))+ 
+    theme_classic()+
+    labs(title = "Individuals - PCA", x = "PC1", y = "PC2")
+  
+
+rownames(RP_ratio_6H_normalized) <- gsub("M682", "Mo17xA682", rownames(RP_ratio_6H_normalized))
+
+RP_pca_var <- get_pca_var(RP_ratio_6H_pca)
+
+RP_var_contrib <- data.frame(RP_pca_var$contrib)
+
+RP_var_contrib <- RP_var_contrib[order(RP_var_contrib$Dim.1, decreasing = T), ]
+
+
+RP_var_top100_dim1 <- data.frame(RP_var_contrib[1:50,])
+
+RP_var_top100_dim1$Gene <- substr(rownames(RP_var_top100_dim1), start = 1, stop = 14)
+
+#RNA_protein_ratio[RNA_protein_ratio$Gene %in% RP_var_top100_dim1$Gene, ]
+
+RP_gamer <- gamer[gamer$db_object_id %in% RNA_protein_ratio$Gene,]
+
+RP_var_top100_GO <- merge_module_GO(binned_count_unique, RP_gamer, nodesize = 5)
+
+
+RP_var_top100_dim2 <- data.frame(RP_var_contrib[1:300,])
+
+RP_var_top100_dim2$Gene <- substr(rownames(RP_var_top100_dim2), start = 1, stop = 14)
+
+RP_var_top100_GO_dim2 <- merge_module_GO(RP_var_top100_dim2, RP_gamer, nodesize = 5)
+
+RP_var_PC12 <- rbind(RP_var_top100_GO[1:10,c(2:5,11)], RP_var_top100_GO_dim2[1:10,c(2:5,11)])
+
+
+RP_var_top100_dim3 <- data.frame(RP_var_contrib[1:300,])
+
+RP_var_top100_dim3$Gene <- substr(rownames(RP_var_top100_dim3), start = 1, stop = 14)
+
+RP_var_top100_GO_dim3 <- merge_module_GO(RP_var_top100_dim3, RP_gamer, nodesize = 5)
+
+RP_var_PC34 <- rbind(RP_var_top100_GO_dim3[1:10,c(2:5,11)], RP_var_top100_GO_dim4[1:10,c(2:5,11)])
+
+
+RP_var_top100_dim4 <- data.frame(RP_var_contrib[1:300,])
+
+RP_var_top100_dim4$Gene <- substr(rownames(RP_var_top100_dim4), start = 1, stop = 14)
+
+RP_var_top100_GO_dim4 <- merge_module_GO(RP_var_top100_dim4, RP_gamer, nodesize = 5)
+
+#scale all genes RNA to protein
+RP_protein_ratio_normalized <- RP_protein_ratio[,2:26]
+RP_protein_ratio_normalized <- scale(t(RP_protein_ratio_normalized), scale = T)
+
+#HMP of RNA/protein ratio
+
+RNA_protein_ratio$B73xMo17_6H <- RNA_protein_ratio$sixhybrid_BM/((RNA_protein_ratio$sixhybrid_B73 + RNA_protein_ratio$sixhybrid_Mo17)/2)
+
+RNA_protein_ratio$B73xB84 <- RNA_protein_ratio$sixhybrid_B73xB84/((RNA_protein_ratio$sixhybrid_B73 + RNA_protein_ratio$sixhybrid_B84)/2)
+
+RNA_protein_ratio$B73xA682 <- RNA_protein_ratio$sixhybrid_B682/((RNA_protein_ratio$sixhybrid_B73 + RNA_protein_ratio$sixhybrid_A682)/2)
+
+RNA_protein_ratio$B84xMo17 <- RNA_protein_ratio$sixhybrid_M84/((RNA_protein_ratio$sixhybrid_B84 + RNA_protein_ratio$sixhybrid_Mo17)/2)
+
+RNA_protein_ratio$B84xMo17 <- RNA_protein_ratio$sixhybrid_M84/((RNA_protein_ratio$sixhybrid_B84 + RNA_protein_ratio$sixhybrid_Mo17)/2)
+
+```
+
+
+
+#rank order
+```{r}
+rank_RP_ratio <- apply(RNA_protein_ratio[,1:30], 2, rank)
+rownames(rank_RP_ratio) <- RNA_protein_ratio$Accession
+
+binned_rank_RP <- data.frame(apply(rank_RP_ratio, 2, function(x) cut(x, breaks = c(0,1000,2000,3000,4000,4967), labels = 1:5)))
+
+binned_rank_RP[,1:25] <- as.numeric(unlist(binned_rank_RP[,1:25]))
+
+
+binned_rank <- t(binned_rank_RP)
+
+colnames(binned_rank) <- RNA_protein_ratio$Accession
+
+c(0,500,1000,1500,2000,2500,3000, 3500,4000,4500,5000,5500,6000,6500)
+
+
+
+
+binned_count <- data.frame(apply(binned_rank[1:4,], 2, function(x) length(unique(x))))
+binned_count$Accession <- rownames(binned_count)
+colnames(binned_count)[1] <- "Count"
+table(binned_count$Count)
+
+binned_count_unique <- data.frame(binned_count[binned_count$Count >2,])
+binned_count_unique$Gene <- substr(binned_count_unique$Accession, start = 1, stop = 14)
+binned_count_unique <- merge.data.frame(binned_count_unique, protein_all_genotype[,c("Accession","Protein")], by.x = "Accession", by.y = "Accession", all.x = T)
+
+
+binned_rank_6H <- binned_rank[1:10,]
+binned_rank_6H_num <- data.frame(t(binned_rank_6H[1:4,]))
+binned_rank_6H_num$std <- length(unique(as.numeric(unlist(binned_rank_6H_num[1:6216,1:4]))))
+binned_rank_6H_selected <- binned_count[binned_count$Count > 1,]
+binned_rank_6H_selected$Gene <- substr(binned_rank_6H_selected$Accession, start = 1, stop = 14)
+binned_rank_6H_selected_GO <-  merge_module_GO(binned_rank_6H_selected, RP_gamer, nodesize = 5)
+
+
+heatmap(binned_rank_6H[1:4,], cexRow = 1, col = brewer.pal(3, "Set1"), labCol = NA, labRow = gsub("AVG_6Hybrid_","", rownames(binned_rank_6H)))
+
+heatmap(NAT_SPE_6H, scale = "col")
+
+NAT_SPE_ratio <- RNA_protein_ratio[RNA_protein_ratio$Gene %in% NAT_SPE$ID,1:11]
+NAT_SPE_ratio[,2:11] <- as.numeric(unlist(NAT_SPE_ratio[,2:11]))
+NAT_SPE_6H <- t(NAT_SPE_ratio[,2:11])
+colnames(NAT_SPE_6H) <- NAT_SPE_ratio$Accession
+```
+
+#rank order scatter plots
+```{r}
+ggplot(rank_RP_ratio_6H, aes(rowMeans(rank_RP_ratio_6H[,c(1,6,11)]),rowMeans(rank_RP_ratio_6H[,c(4,9,13)])))+
+  geom_point(aes(color = Category), size = 1.5, alpha = 0.7, shape = 1)+
+geom_smooth(method = "lm", formula = y ~ x, size = 0.5)+ 
+  scale_color_manual(values = c("Other" = "lightgray", "PhANGs" = "darkgreen", "Cytosolic ribosome" = "blue", "Ethylene Biosynthesis" = "magenta", "NE plastid ribosome" = "brown", "Chloroplast protein homeostasis" = "purple", "PS machinery assembly" = "lightgreen"))+
+ #scale_shape_manual(values = c("NS" = 1, "<0.05" = 8))+
+  xlab("B73 Protein/RNA rank") + 
+  ylab("A682xB73 Protein/RNA rank")+ theme_classic()+
+  theme(legend.text = element_text(size = 6), legend.title = element_blank(), legend.box.spacing = unit(0,"cm"), legend.position = "right", legend.direction = "vertical")
+
+
+ggplot(rank_RP_ratio_6H, aes(x= AVG_6Hybrid_B73, y= AVG_6Hybrid_Mo17))+
+geom_point(aes(colour = group), size=1) +
+geom_smooth(method=lm, se=FALSE, size=0.1) +
+  scale_color_manual(values = c("TRUE" = "darkorange", "FALSE" = "darkslateblue"))
+  
+```
+#find genes with different RP ratio
+```{r}
+rank_RP_ratio_6H <- data.frame(rank_RP_ratio[,c(2,12,22,3,13,23,5,15,25)])
+                               
+rank_RP_ratio_6H$B84Mo17 <- ttestFun(rank_RP_ratio_6H, c(1,2,3), c(4,5,6))
+#rank_RP_ratio_6H$pcorrected <- p.adjust(rank_RP_ratio_6H$B73Mo17t, method = "fdr")
+rank_RP_ratio_6H$B73hybridt <- ttestFun(rank_RP_ratio_6H, c(1,6,11), c(4,9,14))
+rank_RP_ratio_6H$A682hybridt <- ttestFun(rank_RP_ratio_6H, c(3,8,13), c(4,9,14))
+
+rank_RP_ratio_6H$Mo17A682 <- ttestFun(rank_RP_ratio_6H, c(3,8,13), c(2,7,12))
+rank_RP_ratio_6H$Mo17hybridt <- ttestFun(rank_RP_ratio_6H, c(5,10,15), c(2,7,12))
+rank_RP_ratio_6H$A682hybrid2t <- ttestFun(rank_RP_ratio_6H, c(5,10,15), c(3,8,13))
+
+rank_RP_ratio_6H$group <- "NS"
+rank_RP_ratio_6H[which(rank_RP_ratio_6H$B73B84t < 0.05), "group"] <- "<0.05"
+
+#rank_RP_ratio_6H[which(rank_RP_ratio_6H$B73Mo17t < 0.01), "group"] <- "<0.01"
+#rank_RP_ratio_6H[which(rank_RP_ratio_6H$B73Mo17t < 0.001), "group"] <- "<0.001"
+rank_RP_ratio_6H$Accession <- rownames(rank_RP_ratio_6H)
+rank_RP_ratio_6H$Category <- SL_GOIs[match(rank_RP_ratio_6H$Accession, SL_GOIs$Accession), "Category"]
+rank_RP_ratio_6H[rank_RP_ratio_6H$Accession %in% client_chaperone_HMP_2[client_chaperone_HMP_2$Category == "Chloroplast protein homeostasis","Accession"], "Category"] <- "Chloroplast protein homeostasis"
+rank_RP_ratio_6H[rank_RP_ratio_6H$Accession %in% client_chaperone_HMP_2[client_chaperone_HMP_2$Category == "PS assembly, stability and repair","Accession"], "Category"] <- "PS machinery assembly"
+rank_RP_ratio_6H[rank_RP_ratio_6H$Accession %in% client_chaperone_HMP_2[client_chaperone_HMP_2$Category == "Rubisco assembly","Accession"], "Category"] <- "PS machinery assembly"
+
+rank_RP_ratio_inbred_6H <- data.frame(rank_RP_ratio[,1:4])
+rank_RP_ratio_inbred_6H$mean <- rowMeans(rank_RP_ratio_inbred_6H[,c(1,3)])
+rank_RP_ratio_inbred_6H$std <- apply(rank_RP_ratio_inbred_6H[,c(1,3)], 1, sd)
+rank_RP_ratio_inbred_6H$res <- abs(lm(AVG_6Hybrid_Mo17~AVG_6Hybrid_B73,data=rank_RP_ratio_inbred_6H)$residuals)
+rank_RP_ratio_inbred_6H$group <- rank_RP_ratio_inbred_6H$res > 2*sd(rank_RP_ratio_inbred_6H$res)
+
+
+rank_RP_ratio_inbred_6H_selected <- rank_RP_ratio_6H[rank_RP_ratio_6H$B84Mo17 < 0.0011,]
+rank_RP_ratio_inbred_6H_selected$Gene <- substr(rank_RP_ratio_inbred_6H_selected$Accession, start = 1, stop = 14)
+rank_RP_ratio_inbred_6H_selected$Protein <- protein_all_genotype[match(rank_RP_ratio_inbred_6H_selected$Accession, protein_all_genotype$Accession), "Protein"]
+
+rank_RP_ratio_inbred_6H_selected_GO <-  merge_module_GO(rank_RP_ratio_inbred_6H_selected, RP_gamer, nodesize = 5)
+
+selected_gene <- rank_RP_ratio_inbred_6H_selected[rank_RP_ratio_inbred_6H_selected$B84Mo17 < 0.0011,c(10,12:13)]
+colnames(selected_gene)[1] <- "pvalue"
+```
+#seedling leaf protein RNA ratio
+```{r}
+sdl_protein_input <- read.csv("~/Desktop/SdlLeaf_PSM.csv", header = T, stringsAsFactors = F)
+sdl_protein_input <- sdl_protein_input[,-1]
+sdl_protein_input <- sdl_protein_input[order(sdl_protein_input$Group, sdl_protein_input$Score,decreasing = T),]
+
+#remove only, reverse
+sdl_protein_input <- sdl_protein_input[-grep("only", sdl_protein_input$Accession),]
+sdl_protein_input <- sdl_protein_input[-grep("reverse", sdl_protein_input$Accession),]
+
+#order by group, filter by highest score to find group leader
+sdl_protein_input <- sdl_protein_input[order(sdl_protein_input$Group,sdl_protein_input$Score, decreasing = T),]
+
+sdl_protein_input_leaders <- sdl_protein_input %>% 
+  group_by(Group) %>%
+  slice(which.max(Score))
+
+#check all duplicates have been removed
+which(duplicated(sdl_protein_input_leaders$Group))
+
+#save as csv
+
+write.csv(sdl_protein_input_leaders, "sdl_spectral_groupleaders.csv", row.names = F)
+
+sdl_protein_input_leaders <- sdl_protein_input_leaders[-which(is.na(sdl_protein_input_leaders[,"TMT_sum"])),]
+
+```
+#distribute spectral count based on TMT ratio
+```{r}
+#Add up all the spectral counts per technical MS run
+sdl_protein_input_leaders$TMT_sum <- rowSums(sdl_protein_input_leaders[,grep("TMT_num",colnames(sdl_protein_input_leaders))])
+
+#get tmt intensities all biological reps by summing per bio rep across all technical MS runs 
+
+sdl_protein_input_leaders$B73_R1 <- rowSums(sdl_protein_input_leaders[,grep("127N",colnames(sdl_protein_input_leaders))])
+sdl_protein_input_leaders$B73_R2 <- rowSums(sdl_protein_input_leaders[,grep("127C",colnames(sdl_protein_input_leaders))])
+sdl_protein_input_leaders$B73_R3 <- rowSums(sdl_protein_input_leaders[,grep("128N",colnames(sdl_protein_input_leaders))])
+
+sdl_protein_input_leaders$Mo17_R1 <- rowSums(sdl_protein_input_leaders[,grep("128C",colnames(sdl_protein_input_leaders))])
+sdl_protein_input_leaders$Mo17_R2 <- rowSums(sdl_protein_input_leaders[,grep("129N",colnames(sdl_protein_input_leaders))])
+sdl_protein_input_leaders$Mo17_R3 <- rowSums(sdl_protein_input_leaders[,grep("129C",colnames(sdl_protein_input_leaders))])
+
+sdl_protein_input_leaders$BM_R1 <- rowSums(sdl_protein_input_leaders[,grep("130N",colnames(sdl_protein_input_leaders))])
+sdl_protein_input_leaders$BM_R2 <- rowSums(sdl_protein_input_leaders[,grep("130C",colnames(sdl_protein_input_leaders))])
+sdl_protein_input_leaders$BM_R3 <- rowSums(sdl_protein_input_leaders[,grep("131",colnames(sdl_protein_input_leaders))])
+
+#get spectral count of each bio rep using tmt ratios 
+sdl_protein_input_leaders$B73_R1_spc <- sdl_protein_input_leaders$TMT_sum*(sdl_protein_input_leaders$B73_R1/rowSums(sdl_protein_input_leaders[,38:46]))
+sdl_protein_input_leaders$B73_R2_spc <- sdl_protein_input_leaders$TMT_sum*(sdl_protein_input_leaders$B73_R2/rowSums(sdl_protein_input_leaders[,38:46]))
+sdl_protein_input_leaders$B73_R3_spc <- sdl_protein_input_leaders$TMT_sum*(sdl_protein_input_leaders$B73_R3/rowSums(sdl_protein_input_leaders[,38:46]))
+
+sdl_protein_input_leaders$Mo17_R1_spc <- sdl_protein_input_leaders$TMT_sum*(sdl_protein_input_leaders$Mo17_R1/rowSums(sdl_protein_input_leaders[,38:46]))
+sdl_protein_input_leaders$Mo17_R2_spc <- sdl_protein_input_leaders$TMT_sum*(sdl_protein_input_leaders$Mo17_R2/rowSums(sdl_protein_input_leaders[,38:46]))
+sdl_protein_input_leaders$Mo17_R3_spc <- sdl_protein_input_leaders$TMT_sum*(sdl_protein_input_leaders$Mo17_R3/rowSums(sdl_protein_input_leaders[,38:46]))
+
+sdl_protein_input_leaders$BM_R1_spc <- sdl_protein_input_leaders$TMT_sum*(sdl_protein_input_leaders$BM_R1/rowSums(sdl_protein_input_leaders[,38:46]))
+sdl_protein_input_leaders$BM_R2_spc <- sdl_protein_input_leaders$TMT_sum*(sdl_protein_input_leaders$BM_R2/rowSums(sdl_protein_input_leaders[,38:46]))
+sdl_protein_input_leaders$BM_R3_spc <- sdl_protein_input_leaders$TMT_sum*(sdl_protein_input_leaders$BM_R3/rowSums(sdl_protein_input_leaders[,38:46]))
+
+#average bio reps spectral count 
+sdl_protein_input_leaders$B73_spc_avg <- rowMeans(sdl_protein_input_leaders[,c("B73_R1_spc","B73_R2_spc","B73_R3_spc")])
+sdl_protein_input_leaders$Mo17_spc_avg <- rowMeans(sdl_protein_input_leaders[,c("Mo17_R1_spc","Mo17_R2_spc","Mo17_R3_spc")])
+sdl_protein_input_leaders$BM_spc_avg <- rowMeans(sdl_protein_input_leaders[,c("BM_R1_spc","BM_R2_spc","BM_R3_spc")])
+
+write.csv(sdl_protein_input_leaders[])
+```
+
+#rank proteins base on spectral counts
+```{r}
+sdl_protein_input_leaders$B73_rank <- rank(sdl_protein_input_leaders$B73_spc_avg)
+
+sdl_protein_input_leaders$Mo17_rank <- rank(sdl_protein_input_leaders$Mo17_spc_avg)
+
+sdl_protein_input_leaders$BM_rank <- rank(sdl_protein_input_leaders$BM_spc_avg)
+
+#calculate hybrid/MP spc 
+sdl_protein_input_leaders$HMP_spc <- sdl_protein_input_leaders$BM_spc_avg/rowMeans(sdl_protein_input_leaders[,c("B73_spc_avg","Mo17_spc_avg")])
+
+#rank HMP spc
+sdl_protein_input_leaders$HMP_rank <- rank(sdl_protein_input_leaders$HMP_spc)
+
+```
+#rank RNA
+```{r}
+cpm_seedling <- read.csv("cpm_seedling.csv")
+cpm_seedling_rank <- cpm_seedling[,c("Gene","B73","Mo17","B73xMo17","B73xMo17.MP")]
+cpm_seedling_rank <- cpm_seedling_rank[-which(rowMeans(cpm_seedling_rank[,2:4]) <1),]
+cpm_seedling_rank <- cpm_seedling_rank[-which(cpm_seedling_rank[,2] <1),]
+cpm_seedling_rank <- cpm_seedling_rank[-which(cpm_seedling_rank[,3] <1),]
+cpm_seedling_rank <- cpm_seedling_rank[-which(cpm_seedling_rank[,4] <1),]
+cpm_seedling_rank <- cpm_seedling_rank[-grep("ENS", cpm_seedling_rank$Gene),]
+cpm_seedling_rank <- cpm_seedling_rank[-grep("MIR", cpm_seedling_rank$Gene),]
+
+
+cpm_seedling_rank$B73_rank <- rank(cpm_seedling_rank[,"B73"])
+cpm_seedling_rank$Mo17_rank <- rank(cpm_seedling_rank[,"Mo17"])
+cpm_seedling_rank$BM_rank <- rank(cpm_seedling_rank[,"B73xMo17"])
+cpm_seedling_rank$HMP_rank <- rank(cpm_seedling_rank[,"B73xMo17.MP"])
+
+
+```
+#plot ratio of protein rank to RNA rank
+```{r}
+cpm_rank <- cpm_seedling_rank[,c("Gene","B73_rank","Mo17_rank","BM_rank","HMP_rank")]
+protein_rank <- sdl_protein_input_leaders[,c("Accession","B73_rank","Mo17_rank","BM_rank","HMP_rank")]
+protein_rank$Gene <- substr(protein_rank$Accession, start = 1, stop = 14)
+
+#merge protein and RNA rank and calculate protein to RNA ratio 
+protein_cpm_rank<- merge.data.frame(cpm_rank, protein_rank, by = "Gene")
+
+#rerank based on common genes
+protein_cpm_rank$B73_pR <- rank(protein_cpm_rank$B73_rank.y)
+protein_cpm_rank$Mo17_pR <- rank(protein_cpm_rank$Mo17_rank.y)
+protein_cpm_rank$BM_pR <- rank(protein_cpm_rank$BM_rank.y)
+protein_cpm_rank$HMP_pR <- rank(protein_cpm_rank$HMP_rank.y)
+
+protein_cpm_rank$B73_mR <- rank(protein_cpm_rank$B73_rank.x)
+protein_cpm_rank$Mo17_mR <- rank(protein_cpm_rank$Mo17_rank.x)
+protein_cpm_rank$BM_mR <- rank(protein_cpm_rank$BM_rank.x)
+protein_cpm_rank$HMP_mR <- rank(protein_cpm_rank$HMP_rank.x)
+
+
+protein_cpm_rank$B73_ratio <- protein_cpm_rank$B73_pR/protein_cpm_rank$B73_mR
+protein_cpm_rank$Mo17_ratio <- protein_cpm_rank$Mo17_pR/protein_cpm_rank$Mo17_mR
+protein_cpm_rank$BM_ratio <- protein_cpm_rank$BM_pR/protein_cpm_rank$BM_mR
+protein_cpm_rank$HMP_ratio <- protein_cpm_rank$HMP_pR/protein_cpm_rank$HMP_mR
+
+#calculate percentile 
+protein_cpm_rank$B73_RNA_percentile <- protein_cpm_rank$B73_mR/5566
+protein_cpm_rank$Mo17_RNA_percentile <- protein_cpm_rank$Mo17_mR/5566
+protein_cpm_rank$BM_RNA_percentile <- protein_cpm_rank$BM_mR/5566
+protein_cpm_rank$HMP_RNA_percentile <- protein_cpm_rank$HMP_mR/5566
+
+protein_cpm_rank$B73_protein_percentile <- protein_cpm_rank$B73_pR/5566
+protein_cpm_rank$Mo17_protein_percentile <- protein_cpm_rank$Mo17_pR/5566
+protein_cpm_rank$BM_protein_percentile <- protein_cpm_rank$BM_pR/5566
+protein_cpm_rank$HMP_protein_percentile <- protein_cpm_rank$HMP_pR/5566
+
+
+
+#set range of values for rank to be considered protein = mRNA
+
+##calculate residual from slope 6037/17525
+protein_cpm_rank$B73_residual <- protein_cpm_rank$B73_pR - protein_cpm_rank$B73_mR
+protein_cpm_rank$Mo17_residual <- protein_cpm_rank$Mo17_pR - protein_cpm_rank$Mo17_mR
+protein_cpm_rank$BM_residual <- protein_cpm_rank$BM_pR - protein_cpm_rank$BM_mR
+protein_cpm_rank$HMP_residual <- protein_cpm_rank$HMP_pR - protein_cpm_rank$HMP_mR
+
+#assign group
+protein_cpm_rank$Group_B73 <- "Other"
+protein_cpm_rank$Group_Mo17 <- "Other"
+protein_cpm_rank$Group_BM<- "Other"
+protein_cpm_rank$Group_HMP<- "Other"
+
+protein_cpm_rank[which(abs(protein_cpm_rank$B73_residual) < 6037*0.1), "Group_B73"] <- "Protein = mRNA"
+protein_cpm_rank[which(protein_cpm_rank$B73_residual < -6037*0.75), "Group_B73"] <- "mRNA > Protein"
+protein_cpm_rank[which(protein_cpm_rank$B73_residual > 6037*0.75), "Group_B73"] <- "Protein > mRNA"
+
+protein_cpm_rank[which(abs(protein_cpm_rank$Mo17_residual) < 6037*0.1), "Group_Mo17"] <- "Protein = mRNA"
+protein_cpm_rank[which(protein_cpm_rank$Mo17_residual < -6037*0.75), "Group_Mo17"] <- "mRNA > Protein"
+protein_cpm_rank[which(protein_cpm_rank$Mo17_residual > 6037*0.75), "Group_Mo17"] <- "Protein > mRNA"
+
+protein_cpm_rank[which(abs(protein_cpm_rank$BM_residual) < 6037*0.1), "Group_BM"] <- "Protein = mRNA"
+protein_cpm_rank[which(protein_cpm_rank$BM_residual < -6037*0.75), "Group_BM"] <- "mRNA > Protein"
+protein_cpm_rank[which(protein_cpm_rank$BM_residual > 6037*0.75), "Group_BM"] <- "Protein > mRNA"
+
+protein_cpm_rank[which(abs(protein_cpm_rank$HMP_residual) < 6037*0.1), "Group_HMP"] <- "Protein = mRNA"
+protein_cpm_rank[which(protein_cpm_rank$HMP_residual < -6037*0.75), "Group_HMP"] <- "mRNA > Protein"
+protein_cpm_rank[which(protein_cpm_rank$HMP_residual > 6037*0.75), "Group_HMP"] <- "Protein > mRNA"
+```
+#Keep genes detected as either
+```{r}
+#keep genes detected as either RNA/protein 
+protein_cpm_rank_keepall <- merge.data.frame(cpm_rank, protein_rank, by = "Gene", all = T)
+
+#replace NA with 0s
+protein_cpm_rank_keepall[is.na(protein_cpm_rank_keepall)] <- 0
+#check if any protein rank is duplicated
+
+protein_cpm_rank_keepall_proteinnonzero 
+<- protein_cpm_rank_keepall[-which(rowSums(protein_cpm_rank_keepall[,7:9]) ==0),]
+
+protein_cpm_rank_keepall_proteinnonzero[which(duplicated(protein_cpm_rank_keepall_proteinnonzero$B73_rank.y)),]
+
+#set range of values for rank to be considered protein = mRNA
+
+##calculate residual from slope 6037/17515
+protein_cpm_rank_keepall[,c(2:5, 7:10)] <- as.numeric(unlist(protein_cpm_rank_keepall[,c(2:5, 7:10)]))
+protein_cpm_rank_keepall$B73_residual <- 
+protein_cpm_rank_keepall$B73_rank.y-protein_cpm_rank_keepall$B73_rank.x*(6037/17515)
+
+protein_cpm_rank_keepall$Mo17_residual <- 
+protein_cpm_rank_keepall$Mo17_rank.y-protein_cpm_rank_keepall$Mo17_rank.x*(6037/17515)
+
+protein_cpm_rank_keepall$BM_residual <- 
+protein_cpm_rank_keepall$BM_rank.y-protein_cpm_rank_keepall$BM_rank.x*(6037/17515)
+
+protein_cpm_rank_keepall$HMP_residual <- 
+protein_cpm_rank_keepall$HMP_rank.y-protein_cpm_rank_keepall$HMP_rank.x*(6037/17515)
+
+##assign group
+protein_cpm_rank_keepall$Group_B73 <- "Other"
+protein_cpm_rank_keepall$Group_Mo17 <- "Other"
+protein_cpm_rank_keepall$Group_BM<- "Other"
+protein_cpm_rank_keepall$Group_HMP<- "Other"
+
+protein_cpm_rank_keepall[which(abs(protein_cpm_rank_keepall$B73_residual) < 6037*0.1), "Group_B73"] <- "Protein = mRNA"
+protein_cpm_rank_keepall[which(protein_cpm_rank_keepall$B73_residual < -6037*0.75), "Group_B73"] <- "mRNA > Protein"
+protein_cpm_rank_keepall[which(protein_cpm_rank_keepall$B73_residual > 6037*0.75), "Group_B73"] <- "Protein > mRNA"
+
+protein_cpm_rank_keepall[which(abs(protein_cpm_rank_keepall$Mo17_residual) < 6037*0.1), "Group_Mo17"] <- "Protein = mRNA"
+protein_cpm_rank_keepall[which(protein_cpm_rank_keepall$Mo17_residual < -6037*0.75), "Group_Mo17"] <- "mRNA > Protein"
+protein_cpm_rank_keepall[which(protein_cpm_rank_keepall$Mo17_residual > 6037*0.75), "Group_Mo17"] <- "Protein > mRNA"
+
+protein_cpm_rank_keepall[which(abs(protein_cpm_rank_keepall$BM_residual) < 6037*0.1), "Group_BM"] <- "Protein = mRNA"
+protein_cpm_rank_keepall[which(protein_cpm_rank_keepall$BM_residual < -6037*0.75), "Group_BM"] <- "mRNA > Protein"
+protein_cpm_rank_keepall[which(protein_cpm_rank_keepall$BM_residual > 6037*0.75), "Group_BM"] <- "Protein > mRNA"
+
+protein_cpm_rank_keepall[which(abs(protein_cpm_rank_keepall$HMP_residual) < 6037*0.1), "Group_HMP"] <- "Protein = mRNA"
+protein_cpm_rank_keepall[which(protein_cpm_rank_keepall$HMP_residual < -6037*0.75), "Group_HMP"] <- "mRNA > Protein"
+protein_cpm_rank_keepall[which(protein_cpm_rank_keepall$HMP_residual > 6037*0.75), "Group_HMP"] <- "Protein > mRNA"
+
+
+protein_cpm_rank_keepall[which(protein_cpm_rank_keepall$B73_rank.x ==0 & protein_cpm_rank_keepall$B73_rank.y != 0), "Group_B73"] <- "Protein Only"
+protein_cpm_rank_keepall[which(protein_cpm_rank_keepall$B73_rank.y ==0 & protein_cpm_rank_keepall$B73_rank.x != 0), "Group_B73"] <- "mRNA Only"
+
+protein_cpm_rank_keepall[which(protein_cpm_rank_keepall$Mo17_rank.x ==0 & protein_cpm_rank_keepall$Mo17_rank.y != 0), "Group_Mo17"] <- "Protein Only"
+protein_cpm_rank_keepall[which(protein_cpm_rank_keepall$Mo17_rank.y ==0 & protein_cpm_rank_keepall$Mo17_rank.x != 0), "Group_Mo17"] <- "mRNA Only"
+
+protein_cpm_rank_keepall[which(protein_cpm_rank_keepall$BM_rank.x ==0 & protein_cpm_rank_keepall$BM_rank.y != 0), "Group_BM"] <- "Protein Only"
+protein_cpm_rank_keepall[which(protein_cpm_rank_keepall$BM_rank.y ==0 & protein_cpm_rank_keepall$BM_rank.x != 0), "Group_BM"] <- "mRNA Only"
+
+protein_cpm_rank_keepall[which(protein_cpm_rank_keepall$HMP_rank.x ==0 & protein_cpm_rank_keepall$HMP_rank.y != 0), "Group_HMP"] <- "Protein Only"
+protein_cpm_rank_keepall[which(protein_cpm_rank_keepall$HMP_rank.y ==0 & protein_cpm_rank_keepall$HMP_rank.x != 0), "Group_HMP"] <- "mRNA Only"
+
+#scatter plot
+
+ggplot(protein_cpm_rank_keepall, aes(x = HMP_rank.x/1000, y = HMP_rank.y/1000, color = Group_HMP)) +
+  geom_point(size = 0.8)+
+  scale_color_manual(values = c("Protein = mRNA" = "yellow", "Protein > mRNA" = "brown", "mRNA > Protein" = "violet", "Protein Only" = "darkorange", "mRNA Only" = "darkblue"), labels = c("mRNA > Protein","mRNA Only","Protein = mRNA","Protein > mRNA", "Protein Only")) + 
+  theme_classic() +
+  scale_x_continuous(expand = c(0,0), limits = c(0,17.6)) +
+  scale_y_continuous(expand = c(0,0), limits = c(0,6.1)) +
+  theme(legend.title = element_blank())+
+  xlab("mRNA Rank Order (Thousands)") +
+  ylab("Protein Rank Order (Thousands)")+
+  ggtitle("HYB/MP seedling leaf") +
+  theme(plot.title =element_text(size = 14, hjust = 0.5)) +
+  theme(axis.text = element_text(size = 10))  +
+  theme(axis.line = element_line(linewidth = 0.1, color = "lightgray"))
+```
+#histogram
+```{r}
+ggplot(protein_cpm_rank_keepall, aes(x = BM_rank.x/1000)) +
+        geom_density(data = subset(protein_cpm_rank_keepall, (BM_rank.y == 0 & BM_rank.x !=0)), aes(color = "RNA Only"), size = 1)+ 
+
+       geom_density(data = subset(protein_cpm_rank_keepall, (BM_rank.y != 0 & BM_rank.x !=0)), aes(color = "RNA & Protein"), size = 1)+
+         
+  xlab("mRNA Rank Order (Thousands)") +
+  ylab("Probability")+
+  scale_color_manual(values = c("RNA Only" = "seagreen", "RNA & Protein" = "darkblue"))+
+  theme_classic()+
+  scale_x_continuous(expand = c(0.01,0.01))+
+  scale_y_continuous(expand = c(0.01,0.01)) +
+  guides(color = guide_legend(title = "")) +
+  theme(legend.position = "bottom")
+  
+```
+
+#Scatter plot
+```{r}
+#plot
+ggplot(protein_cpm_rank, aes(x = HMP_pR/1000, y = HMP_mR/1000, color = HMP_residual)) +
+  geom_point(size = 0.5)+
+  #scale_color_manual(values = c("Protein = mRNA" = "yellow", "Protein > mRNA" = "red", "mRNA > Protein" = "blue"), labels = c("mRNA > Protein", "Protein = mRNA", "Protein > mRNA")) + 
+  theme_classic() +
+ scale_color_viridis()+
+  scale_x_continuous(expand = c(0,0)) +
+  scale_y_continuous(expand = c(0,0)) +
+
+  xlab("mRNA Rank order(Thousands)") +
+  ylab("Protein Rank Order (Thousands)")+
+ ggtitle("HYB/MP seedling leaf") +
+  theme(plot.title =element_text(size = 14, hjust = 0.5)) +
+  theme(axis.text = element_text(size = 10)) + 
+  coord_equal() +
+  guides(color = guide_legend(title = "")) +
+  geom_abline(slope = 1, color = "white") +
+  
+  geom_abline(slope = 1, color = "white", intercept = 2.5) +
+    geom_abline(slope = 1, color = "black", intercept = 5) +
+    geom_abline(slope = 1, color = "white", intercept = -2.5) +
+    geom_abline(slope = 1, color = "black", intercept = -5)
+      
+
+geom_abline(slope = 6037/17525, )
+geom_smooth(fun.y = 6037/17525)
+```
+
+#bar plot count groups
+```{r}
+barplot_rankratio <- rbind(data.frame(table(protein_cpm_rank$Group_B73)),data.frame(table(protein_cpm_rank$Group_Mo17)),data.frame(table(protein_cpm_rank$Group_BM)),data.frame(table(protein_cpm_rank$Group_HMP)))
+
+barplot_rankratio <- barplot_rankratio[-grep("Other", barplot_rankratio$Var1),]
+
+barplot_rankratio$Genotype <- c(rep_len("B73",3),rep_len("Mo17",3),rep_len("BM",3),rep_len("HMP",3))
+
+ggplot(barplot_rankratio, aes(x = Genotype, y = Freq, fill = Var1)) +geom_bar(stat = "identity", position = "stack")
+```
+#alluvial plot
+```{r}
+#formulate data
+alluvial_rank_protein <- as.data.frame(mapply(c, protein_cpm_rank[,c(2,6)], protein_cpm_rank[,c(3,6)], protein_cpm_rank[,c(4,6)], protein_cpm_rank[,c(5,6)]))
+
+alluvial_rank_protein$Genotype <- c(rep("B73", nrow(protein_cpm_rank)), rep("Mo17", nrow(protein_cpm_rank)),rep("BM", nrow(protein_cpm_rank)),rep("HMP", nrow(protein_cpm_rank)))
+
+colnames(alluvial_rank_protein)[1] <- "RNA_Rank"
+
+alluvial_rank_protein %>% group_by(Accession) 
+
+ggplot(alluvial_rank_protein, aes(x = Genotype, alluvium = Accession, stratum = RNA_Rank)) +
+  geom_alluvium()
+  #scale_y_c()
+  #geom_flow(stat = "alluvium")
+
+```
+
+#heatmap
+```{r}
+#use distance to hybrid/hybrid to define parents
+protein_rank_heatmap <- protein_cpm_rank[,c(11:13,15:17)]
+rownames(protein_rank_heatmap) <- protein_cpm_rank$Accession
+
+protein_rank_heatmap[,7:9] <- scale(protein_rank_heatmap[,1:3], )
+
+protein_rank_heatmap[,7:9] <- apply(protein_rank_heatmap[,1:3], 1, function(x)scale(x))
+
+protein_rank_heatmap[,1:3] <- (protein_rank_heatmap[,1:3] - protein_rank_heatmap$BM_pR)/5566
+
+protein_rank_heatmap[,4:6] <- (protein_rank_heatmap[,4:6] - protein_rank_heatmap$BM_mR)/5566
+
+#transpose into matrix
+protein_rank_heatmap_t <- t(protein_rank_heatmap[,c(1:2,4:5)])
+protein_rank_heatmap_l <- t(protein_rank_heatmap_t)
+#colnames(protein_rank_heatmap_t) <- protein_cpm_rank$Accession
+
+#saturate
+protein_rank_heatmap_l[protein_rank_heatmap_l > 0.1] <- 0.1
+protein_rank_heatmap_l[protein_rank_heatmap_l < -0.1] <- -0.1
+
+protein_rank_heatmap_l[protein_rank_heatmap_l > -0.01 & protein_rank_heatmap_l < 0] <- -0.01
+protein_rank_heatmap_l[protein_rank_heatmap_l < 0.01 & protein_rank_heatmap_l > 0] <- 0.01
+#heatmap_1
+
+RNA_protein_HM <- heatmap.2(protein_rank_heatmap_l[,1:2], Rowv = T, Colv = F, labRow = NA, col = my_palette, cexRow = 0.3,   
+                           reorderfun=function(d,w) reorder(d,w,agglo.FUN = mean))
+        #distfun=function(x) dist(x, method = "euclidean"),
+        #distfun=function(x) as.dist(1-cor(t(x))),
+        #hclustfun =function(x) hclust(x, method = "average"))
+
+#custom colors
+my_palette <- colorRampPalette(c("darkblue","white", "darkorange"))(n = 300)
+
+hist(protein_rank_heatmap[,5])
+
+```
+
+heatmap and save
+```{r}
+#heatmap_2
+png(file='heatmap_1.png', height=800, width=600)
+
+heatmap.2(protein_rank_heatmap_l, Rowv = T, Colv = T, dendrogram = "both", trace = "none", density.info = "none",
+        reorderfun=function(d,w) reorder(d,w,agglo.FUN = sum), 
+          key.title = "Scaled Rank Order", key.xlab = "", cexCol = 1, margins = c(6,9), main = "", scale = "none", col = my_palette, labRow = NA, 
+       # distfun=function(x) dist(x, method = "euclidean"),
+        #distfun=function(x) as.dist(1-cor(t(x))),
+        hclustfun =function(x) hclust(x, method = "ward.D2"),
+         # rowsep = c(359,464,730,1517,5566), 
+              labCol = c("B73_protein", "Mo17_protein", "B73_mRNA", "Mo17_mRNA"),
+          sepcolor = "black", lwid=c(2,3), lhei=c(0.5,4), lmat = rbind(c(4,3),c(2,1)), srtCol = 0, adjCol = 0.5, 
+               key.xtickfun=function() {
+               cex <- par("cex")*par("cex.axis")
+               side <- 1
+               line <- 1
+               col <- par("col.axis")
+               font <- par("font.axis")
+               mtext("0", side=side, at=0.53, adj=1.1,
+                     line=line, cex=1, col=col, font=font)
+              mtext("< -0.2", side=side, at=0, adj=0.5,
+                     line=line, cex=1, col=col, font=font)
+               mtext("> 0.2", side=side, at=1, adj=0.2,
+                     line=line, cex=1, col=col, font=font)
+               return(list(labels=FALSE, tick=FALSE))
+          })
+
+dev.off()
+
+   #1    2    3    4    5    6    7    8    9 
+#1027  397   65 2679  528  256  348  189   77 
+```
+
+#get clusters from dendrogram
+```{r}
+#get clusters from dendrogram
+RNA_protein_HM$colInd
+RNA_protein_HM$rowDendrogram
+  
+RNA_protein_order_cluster <- data.frame(cutree(as.hclust(RNA_protein_HM$rowDendrogram), h = 0.3))
+  
+  colnames(RNA_protein_order_cluster)[1] <- "Cluster"
+  
+  RNA_protein_order_cluster$Accession <- rownames(RNA_protein_order_cluster)
+  
+  table(RNA_protein_order_cluster$Cluster)
+
+#cluster2
+Cluster1 <- RNA_protein_order_cluster[RNA_protein_order_cluster$Cluster == 1, ]
+Cluster2 <- RNA_protein_order_cluster[RNA_protein_order_cluster$Cluster == 2, ]
+Cluster3 <- RNA_protein_order_cluster[RNA_protein_order_cluster$Cluster == 3, ]
+Cluster4 <- RNA_protein_order_cluster[RNA_protein_order_cluster$Cluster == 4, ]
+Cluster5 <- RNA_protein_order_cluster[RNA_protein_order_cluster$Cluster == 5, ]
+Cluster6 <- RNA_protein_order_cluster[RNA_protein_order_cluster$Cluster == 6, ]
+Cluster7 <- RNA_protein_order_cluster[RNA_protein_order_cluster$Cluster == 7, ]
+Cluster8 <- RNA_protein_order_cluster[RNA_protein_order_cluster$Cluster == 8, ]
+Cluster9 <- RNA_protein_order_cluster[RNA_protein_order_cluster$Cluster == 9, ]
+
+Cluster1$Gene <- substr(Cluster1$Accession, start = 1, stop = 14)
+Cluster2$Gene <- substr(Cluster2$Accession, start = 1, stop = 14)
+Cluster3$Gene <- substr(Cluster3$Accession, start = 1, stop = 14)
+Cluster4$Gene <- substr(Cluster4$Accession, start = 1, stop = 14)
+Cluster5$Gene <- substr(Cluster5$Accession, start = 1, stop = 14)
+Cluster6$Gene <- substr(Cluster6$Accession, start = 1, stop = 14)
+Cluster7$Gene <- substr(Cluster7$Accession, start = 1, stop = 14)
+Cluster8$Gene <- substr(Cluster8$Accession, start = 1, stop = 14)
+Cluster9$Gene <- substr(Cluster9$Accession, start = 1, stop = 14)
+
+Cluster1$Protein <- sdl_protein_input_leaders[match(Cluster1$Accession, sdl_protein_input_leaders$Accession),"Protein"]
+Cluster2$Protein <- sdl_protein_input_leaders[match(Cluster2$Accession, sdl_protein_input_leaders$Accession),"Protein"]
+Cluster3$Protein <- sdl_protein_input_leaders[match(Cluster3$Accession, sdl_protein_input_leaders$Accession),"Protein"]
+Cluster4$Protein <- sdl_protein_input_leaders[match(Cluster4$Accession, sdl_protein_input_leaders$Accession),"Protein"]
+Cluster5$Protein <- sdl_protein_input_leaders[match(Cluster5$Accession, sdl_protein_input_leaders$Accession),"Protein"]
+Cluster6$Protein <- sdl_protein_input_leaders[match(Cluster6$Accession, sdl_protein_input_leaders$Accession),"Protein"]
+Cluster7$Protein <- sdl_protein_input_leaders[match(Cluster7$Accession, sdl_protein_input_leaders$Accession),"Protein"]
+Cluster8$Protein <- sdl_protein_input_leaders[match(Cluster8$Accession, sdl_protein_input_leaders$Accession),"Protein"]
+Cluster9$Protein <- sdl_protein_input_leaders[match(Cluster9$Accession, sdl_protein_input_leaders$Accession),"Protein"]
+
+Cluster1$Complex <- complex[match(Cluster1$Gene, complex$Gene),"complex_label"]
+Cluster2$Complex <- complex[match(Cluster2$Gene, complex$Gene),"complex_label"]
+Cluster3$Complex <- complex[match(Cluster3$Gene, complex$Gene),"complex_label"]
+Cluster4$Complex <- complex[match(Cluster4$Gene, complex$Gene),"complex_label"]
+Cluster5$Complex <- complex[match(Cluster5$Gene, complex$Gene),"complex_label"]
+Cluster6$Complex <- complex[match(Cluster6$Gene, complex$Gene),"complex_label"]
+Cluster7$Complex <- complex[match(Cluster7$Gene, complex$Gene),"complex_label"]
+Cluster8$Complex <- complex[match(Cluster8$Gene, complex$Gene),"complex_label"]
+Cluster9$Complex <- complex[match(Cluster9$Gene, complex$Gene),"complex_label"]
+
+RNA_protein_order_cluster$Category <- SL_GOIs[match(RNA_protein_order_cluster$Accession, SL_GOIs$Accession), "Category"]
+
+RNA_protein_order_cluster$Gene <- substr(RNA_protein_order_cluster$Accession, start = 1, stop = 14)
+
+RNA_protein_order_cluster$Category_2 <- client_chaperone_HMP_2[match(RNA_protein_order_cluster$Gene, client_chaperone_HMP_2$Gene), "Category"]
+
+RNA_protein_order_cluster %>% group_by(Category_2,Cluster) %>% tally()
+
+#GO enrichment
+#protein_RNA_rank_gamer <- gamer[gamer$db_object_id %in% protein_cpm_rank$Gene,]
+Cluster1_GO <- merge_module_GO(Cluster1, protein_RNA_rank_gamer, nodesize = 5)
+Cluster2_GO <- merge_module_GO(Cluster2, protein_RNA_rank_gamer, nodesize = 5)
+Cluster3_GO <- merge_module_GO(Cluster3, protein_RNA_rank_gamer, nodesize = 5)
+Cluster4_GO <- merge_module_GO(Cluster4, protein_RNA_rank_gamer, nodesize = 5)
+Cluster5_GO <- merge_module_GO(Cluster5, protein_RNA_rank_gamer, nodesize = 5)
+Cluster6_GO <- merge_module_GO(Cluster6, protein_RNA_rank_gamer, nodesize = 5)
+Cluster7_GO <- merge_module_GO(Cluster7, protein_RNA_rank_gamer, nodesize = 3)
+Cluster8_GO <- merge_module_GO(Cluster8, protein_RNA_rank_gamer, nodesize = 3)
+Cluster9_GO <- merge_module_GO(Cluster9, protein_RNA_rank_gamer, nodesize = 3)
+
+
+
+
+          
+          # labRow = c("B73_RNA", "B73_Protein", "Mo17_RNA", "Mo17_Protein"), col = my_palette)
+```
+
+#proteome dominance seedling leaf scatter plot
+```{r}
+sdl_scatter <- Tissues_full_HP_PD[,c(grep("SdlLeaf", colnames(Tissues_full_HP_PD)), 1, 262)]
+
+sdl_scatter <- na.omit(sdl_scatter)
+
+colnames(sdl_scatter) <- scatter_colnames[1:15]
+
+#sdl_scatter[,c(1,2,5,6,7,8,9,10)] <- as.numeric(unlist(sdl_scatter[,c(1,2,5,6,7,8,9,10)]))
+
+sdl_scatter$AD_Category <- "Additive"
+  
+sdl_scatter[which(abs(sdl_scatter$Endo14_l2_HMP) > log2(1.25) & sdl_scatter$Endo14_HMP_pval < 0.01), "AD_Category"] <- "Nonadditive"
+
+sdl_scatter$P_category <- "NonDE"
+
+sdl_scatter[which(sdl_scatter$Endo14_l2_B73Mo17 > log2(1.25) & sdl_scatter$Endo14_B73Mo17_pval < 0.01), "P_category"] <- "DE_B73"
+
+sdl_scatter[which(sdl_scatter$Endo14_l2_B73Mo17 < log2(0.8) & sdl_scatter$Endo14_B73Mo17_pval < 0.01), "P_category"] <- "DE_Mo17"
+
+sdl_scatter$PD_category <- "Z"
+
+sdl_scatter[sdl_scatter$AD_Category == "Nonadditive" & sdl_scatter$P_category != "NonDE", "PD_category"] <- "Proteome Dominance"
+
+sdl_scatter[sdl_scatter$AD_Category == "Nonadditive" & sdl_scatter$P_category == "NonDE", "PD_category"] <- "Hybrid Dominance Only"
+
+sdl_scatter[sdl_scatter$AD_Category == "Additive" & sdl_scatter$P_category != "NonDE", "PD_category"] <- "Parents Differential Expression Only"
+
+
+#sdl_scatter[match(sdl_scatter$Accession, client_chaperone_HMP_2$Accession),"PD_category"] <- client_chaperone_HMP_2[match(sdl_scatter$Accession, client_chaperone_HMP_2$Accession),"Category"]
+
+
+sdl_scatter$Category_GOI <- client_chaperone_HMP_2[match(sdl_scatter$Accession, client_chaperone_HMP_2$Accession),"Category"]
+
+sdl_scatter[is.na(sdl_scatter$Category_GOI), "Category_GOI"] <- "Other"
+
+#sdl_scatter[sdl_scatter$Category_GOI != "Other", "PD_category"] <- sdl_scatter[sdl_scatter$Category_GOI != "Other", "Category_GOI"]
+
+sdl_scatter[sdl_scatter$Category_GOI == "Other" & sdl_scatter$PD_category != "Z", "Category_GOI"] <- "All other (PD,D & DE)"
+
+
+```
+
+
+```{r}
+
+TOR_interactor_tissues <- merge.data.frame(Tissues_full_HP_PD[,c(grep("l2", colnames(Tissues_full_HP_PD)),262)], TOR_component, by.x = "Gene", by.y = "Gene")
+Tissues_full_HP_PD[Tissues_full_HP_PD$Gene %in% TOR_interactor$Gene, grep("l2", colnames(Tissues_full_HP_PD))]
+
+Endo_TOR <- TOR_interactor_tissues[,c(grep("Endo14", colnames(TOR_interactor_tissues)),42:44)]
+
+Protein_6H_TOR <- merge.data.frame(Protein_6H, TOR_component, by.x = "Gene", by.y = "Gene")
+```
+
+```{r}
+#raw data 
+Endosperm <- tmt_full[,c(grep("Endo", colnames(tmt_full)), 442:452), ]
+
+Embryo27 <- t_full[,c(grep("Embryo27", colnames(tmt_full))), ]
+
+Root <- tissue_full[,c(grep("ROOT", colnames(tissue_full)), 442:452), ]
+sdlroot <- tissue_full[,c(grep("SdlRoot", colnames(tissue_full)), 452), ]
+
+Root  <- Root[,-(47:55)]
+
+Root_sdlroot <- cbind(Root[,1:45], sdlroot)
+Root_sdlroot[grep("reverse", Root_sdlroot$Accession),]
+
+
+write.csv(Endosperm, "tmt_Endosperm.csv", row.names = F)
+write.csv(Embryo27, "tmt_Embryo.csv", row.names = F)
+
+write.csv(Root_sdlroot, "tmt_root_sdlroot.csv", row.names = F)
+
+Embryo27_filtered <- Embryo27[,-(23:27)]
+Embryo27_filtered <- na.omit(Embryo27_filtered)
+
+Embryo27_filtered <- Embryo27[order(Embryo27$Group, -(Embryo27$Score)), ]
+Embryo27_filtered <- Embryo27_filtered
+
+Embryo27_filtered <- Embryo27_filtered %>% group_by(Group) %>% slice(which.max(Score))
+Embryo27_filtered[which(duplicated(Embryo27_filtered$Group)),]
+
+filtered_data = raw_data[raw_data$Score %in% max_score,]
+
+```
+
+#sample code
+```{r}
+
+require(dplyr)
+
+##read in raw data file
+tmt_embryo27 <- read.csv("tmt_Embryo.csv", header = T, stringsAsFactors = F) ###use the absolute path if the raw data file is not in your working directory 
+
+
+##get rid of the columns with all NAs, this can be hard coded to save time but the column # is different for each tissue
+tmt_embryo27 <- tmt_embryo27[,-(24:27)]
+
+
+##apply na.omit() to dump missing values
+tmt_sdl_root_noNA<- na.omit(Root_sdlroot)
+
+
+##get rid of decoy hits and single parent peptides 
+#tmt_sdl_root_noNA <- tmt_sdl_root_noNA[-grep("reverse", tmt_sdl_root_noNA$Accession),] ###decoy hits
+
+tmt_sdl_root_noNA <- tmt_sdl_root_noNA[-grep("only", tmt_sdl_root_noNA$Accession),] ###single parent peptide
+
+
+
+##use dplyr functions to group proteins by group number and select group leaders
+tmt_sdl_root_noNA <- tmt_sdl_root_noNA %>% group_by(Group) %>% slice(which.max(Score))
+
+##check if there are still ambiguous group leaders 
+nrow(tmt_embryo27_filtered[which(duplicated(tmt_embryo27_filtered$Group)),])
+
+##get the list of column names with tmt intensities 
+tmt_colnames <- data.frame(colnames(tmt_sdl_root_noNA[,grep("Normalized", colnames(tmt_sdl_root_noNA))])) ###all the columns with tmt intensities all start with "Normalized"
+
+colnames(tmt_colnames)[1] <- "Colnames"
+
+##remove everything after the first . in the column names
+tmt_colnames$trimmed_IDs <- gsub("\\..*","",tmt_colnames$Colnames)
+
+##remove everything up to "_" to get unique channel IDS
+tmt_colnames$trimmed_IDs <- gsub(".*_", "", tmt_colnames$trimmed_IDs)
+
+##get unique IDs (you can also find out how many technique runs you have by dividing the nrows by 9)
+tmt_channel_IDs <- data.frame(unique(tmt_colnames$trimmed_IDs))
+colnames(tmt_channel_IDs)[1] <- "Channel_IDs"
+
+##match to biological replicates 
+tmt_channel_IDs$bio_reps <- c("B73_R1", "B73_R2", "B73_R3", "Mo17_R1", "Mo17_R2", "Mo17_R3", "BxM_R1", "BxM_R2", "BxM_R3")
+
+##add up tmt intensities with the same channel ID from technical runs to get biological replicates 
+  ###You can hard code this part line by line but this is a simple function to loop through all the channel IDS
+
+for (i in 1:nrow(tmt_channel_IDs)){
+  
+  tmt_sdl_root_noNA[,tmt_channel_IDs[i,"bio_reps"]] <- rowSums(tmt_sdl_root_noNA[,grep(tmt_channel_IDs[i,"Channel_IDs"],colnames(tmt_sdl_root_noNA))])
+  
+}
+
+#save the biological replicates in a separate .csv file
+embryo27_proteome <- tmt_embryo27_filtered[,c("Accession", tmt_channel_IDs$bio_reps)]
+
+write.csv(embryo27_proteome, "embryo27_proteome.csv", row.names = F)
+
+
+```
+
+#read in data
+```{r}
+tmt_sdl_root <- read.csv(file = "~/Downloads/tmt_root_sdlroot.csv", header = T, stringsAsFactors = F)
+colnames(tmt_sdl_root_noNA)[1:72] <- tmt_channel_IDs[match(tmt_colnames$trimmed_IDs, tmt_channel_IDs$Channel_IDs),"bio_reps"]
+tmt_channel_IDs[match(tmt_colnames$trimmed_IDs, tmt_channel_IDs$Channel_IDs),"bio_reps"]
+```
+

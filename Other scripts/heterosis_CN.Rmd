@@ -1,0 +1,157 @@
+---
+title: "Heterosis_concensus_network"
+author: "Bridget Bai"
+date: "2024-01-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+#
+```{r}
+seedling_mature_rubisco <- seedling_mature[seedling_mature$Gene %in% Rubisco_protein_all$Gene, ]
+protein_6H <- protein_cor_input_6H
+protein_6H <- protein_6H[-grep("only", protein_6H$Accession),]
+protein_6H <- protein_6H[-grep("reverse", protein_6H$Accession),]
+protein_6H <- protein_6H[-grep("Inf", protein_6H$B73_Mo17),]
+protein_6H <- protein_6H[-grep("Inf", protein_6H$B73_A682),]
+
+protein_6H$B73_B84 <- log2(protein_6H$AVG_6Hybrid_B73/protein_6H$AVG_6Hybrid_B84)
+protein_6H$B73_Mo17 <- log2(protein_6H$AVG_6Hybrid_B73/protein_6H$AVG_6Hybrid_Mo17)
+protein_6H$B73_A682 <- log2(protein_6H$AVG_6Hybrid_B73/protein_6H$AVG_6Hybrid_A682)
+protein_6H$Mo17_A682 <- log2(protein_6H$AVG_6Hybrid_Mo17/protein_6H$AVG_6Hybrid_A682)
+
+protein_6H$B73B84_B73Mo17 <- protein_6H$B73_B84/protein_6H$B73_Mo17
+protein_6H$B73B84_B73Mo17_residue <- protein_6H$B73_Mo17 - protein_6H$B73_B84
+#mean(protein_6H$B73B84_B73Mo17_residue)
+protein_6H$B73B84_B73Mo17_residue_abs <- abs(protein_6H$B73B84_B73Mo17_residue)
+
+protein_6H$Mo17A682_B73A682 <- protein_6H$Mo17_A682/protein_6H$B73_A682
+protein_6H$Mo17A682_B73A682_residue <- protein_6H$Mo17_A682 - protein_6H$B73_A682
+#mean(protein_6H$B73B84_B73Mo17_residue)
+protein_6H$Mo17A682_B73A682_residue_abs <- abs(protein_6H$Mo17A682_B73A682_residue)
+
+inbred_ratio <- t(protein_6H[,12:13])
+colnames(inbred_ratio) <- protein_6H$Accession
+inbred_ratio <- abs(inbred_ratio)
+inbred_ratio[inbred_ratio > 1] <- 1
+inbred_ratio[inbred_ratio < -1] <- -1
+
+
+
+ggplot(protein_6H, aes(B73_B84, B73_Mo17, color = Category)) +geom_point(size = 1.5) +
+ xlim(-1,1)+
+  ylim(-1,1)+
+  geom_abline(intercept = 0, slope = 1, color = "black", linetype = "dotted")+
+  geom_vline(xintercept = 0, color = "grey40", linetype = "dotted") + 
+  geom_hline(yintercept = 0, color = "grey40")+
+scale_color_manual(values = c("PhANGs" = "green", "Cytosolic ribosome" = "yellow","PhAPGs" = "darkgreen", "PE plastid ribosome" = "purple","NE plastid ribosome" = "magenta","Ethylene Biosynthesis" = "blue", "Z" = "lightgrey"), labels = c("PhANGs" = "PhANGs", "Cytosolic ribosome" = "Cytosolic ribosome", "PhAPGs" = "PhAPGs", "PE plastid ribosome" = "PE plastid ribosome","NE plastid ribosome" = "NE plastid ribosome", "Ethylene Biosynthesis" = "Ethylene Biosynthesis", "Z" = "Other")) +
+  theme_classic() +
+  ylab("log2(B73/Mo17)")+
+  xlab("log2(B73/B84)")
+  
+
+
+
+ggplot(protein_6H, aes(x = B73_B84, color = )) +
+  geom_histogram(fill = "white", bins = 100)+
+  xlim(-2,2)
+
+```
+
+
+```{r}
+par(mar = c(5,10,3,10))
+
+heatmap.2(inbred_ratio, trace = "none", col = my_palette, breaks = colors, cexRow = 1, cexCol = 1,keysize = 0.5, key.title = "", key.ylab = "", key.xlab = "log2 value", labCol = NA)
+
+out <- heatmap.2(inbred_ratio, trace = "none", col = my_palette, breaks = colors, cexRow = 0.8, key.title = "", key.ylab = "", key.xlab = "log2 value", labCol = NA, lwid = c(1,3),reorderfun=function(d,w) reorder(d,w,agglo.FUN = mean), )
+
+
+
+
+
+col_clust <- hclust(dist(t(inbred_ratio), method = 'euclidean'), method = 'complete')
+#row_clust_reordered <- reorder(as.dendrogram(row_clust), wts = 0, agglo.FUN = "mean")
+
+out <- heatmap.2(inbred_ratio, trace = "none", scale = "none", col = my_palette, breaks = colors, cexRow = 0.8, labCol = NA, key.title = "", key.ylab = "", key.xlab = "log2 scaled", lwid = c(1,4), dendrogram = "both", reorderfun = function(d,w) reorder(d,w,agglo.FUN = mean), lhei = c(2,4))
+
+out_ind <- heatmap.2(inbred_ratio[,out$colInd[8413:8481]], trace = "none", scale = "none", col = my_palette, breaks = colors, cexRow = 0.8, cexCol = 0.4,key.title = "", key.ylab = "", key.xlab = "log2 scaled", lwid = c(1,4), dendrogram = "col", reorderfun = function(d,w) reorder(d,w,agglo.FUN = mean), lhei = c(2,4))
+
+table(cutree(col_clust, h = 1.1))
+groups <- data.frame(cutree(col_clust, h = 1.1))
+colnames(groups)[1] <- "cluster"
+groups$Accession <- rownames(groups)
+
+out$colInd[8413]
+protein_6H[protein_6H$Accession == "Zm00001d020686_T001",]
+groups[groups$Accession == "Zm00001d020686_T001",]
+
+group9 <- groups[groups$cluster == "9",]
+group9$Protein <- protein_all_genotype[match(group9$Accession, protein_all_genotype$Accession), "Protein"]
+group9$category <- client_chaperone_HMP_2[match(group9$Accession, client_chaperone_HMP_2$Accession), "Category"]
+
+group5 <- groups[groups$cluster == "5",]
+group5$Protein <- protein_all_genotype[match(group5$Accession, protein_all_genotype$Accession), "Protein"]
+protein_6H[protein_6H$Accession %in% group5$Accession, ]
+
+group10 <- groups[groups$cluster == "10",]
+group10$Protein <- protein_all_genotype[match(group10$Accession, protein_all_genotype$Accession), "Protein"]
+protein_6H[protein_6H$Accession %in% group10$Accession, ]
+group10$category <- client_chaperone_HMP_2[match(group10$Accession, client_chaperone_HMP_2$Accession), "Category"]
+
+group11 <- groups[groups$cluster == "11",]
+group11$Protein <- protein_all_genotype[match(group11$Accession, protein_all_genotype$Accession), "Protein"]
+protein_6H[protein_6H$Accession %in% group11$Accession, ]
+
+group12 <- groups[groups$cluster == "12",]
+group12$Protein <- protein_all_genotype[match(group12$Accession, protein_all_genotype$Accession), "Protein"]
+protein_6H[protein_6H$Accession %in% group12$Accession, ]
+group12$category <- client_chaperone_HMP_2[match(group12$Accession, client_chaperone_HMP_2$Accession), "Category"]
+
+group8 <- groups[groups$cluster == "8",]
+group8$Protein <- protein_all_genotype[match(group8$Accession, protein_all_genotype$Accession), "Protein"]
+protein_6H[protein_6H$Accession %in% group8$Accession, ]
+group8$category <- client_chaperone_HMP_2[match(group8$Accession, client_chaperone_HMP_2$Accession), "Category"]
+
+
+cluster_highDE <- rbind(group10,group9)
+
+protein_6H[,c(inbred_ratio[,out$colInd[8345:8412]])]
+protein_6H[c(out$colInd[8413:8482]),]
+
+groups$category <- client_chaperone_HMP_2[match(groups$Accession, client_chaperone_HMP_2$Accession), "Category"]
+groups %>% group_by(category,cluster) %>% tally()
+```
+
+#find complementation candidates
+```{r}
+pool_A <- protein_6H[which(protein_6H$B73_B84 > 0.2 & protein_6H$B73_Mo17 > 0.2),]
+pool_B <- protein_6H[which(protein_6H$B73_B84 < -0.2 & protein_6H$B73_Mo17 < -0.2),]
+
+pool_A$Gene <- substr(pool_A$Accession, start = 1, stop = 14)
+pool_B$Gene <- substr(pool_B$Accession, start = 1, stop = 14)
+
+pool_A$Category_2 <- candidates[match(pool_A$Gene, candidates$Gene), "Pathway"]
+pool_B$Category_2 <- candidates[match(pool_B$Gene, candidates$Gene), "Pathway"]
+
+pool_A$rubisco <- Rubisco_candidate[match(pool_A$Gene, Rubisco_candidate$Gene), "Symbol"]
+pool_B$rubisco <- Rubisco_candidate[match(pool_B$Gene, Rubisco_candidate$Gene), "Symbol"]
+
+pool_C <- protein_6H[which(protein_6H$B73_B84 > 0.2 & protein_6H$B73_Mo17 < -0.2),]
+pool_D <- protein_6H[which(protein_6H$B73_B84 < -0.2 & protein_6H$B73_Mo17 > 0.2),]
+
+pool_C$Gene <- substr(pool_C$Accession, start = 1, stop = 14)
+pool_D$Gene <- substr(pool_D$Accession, start = 1, stop = 14)
+
+pool_C$Category_2 <- candidates[match(pool_C$Gene, candidates$Gene), "Pathway"]
+pool_D$Category_2 <- candidates[match(pool_D$Gene, candidates$Gene), "Pathway"]
+
+pool_C$rubisco <- Rubisco_candidate[match(pool_C$Gene, Rubisco_candidate$Gene), "Symbol"]
+pool_D$rubisco <- Rubisco_candidate[match(pool_D$Gene, Rubisco_candidate$Gene), "Symbol"]
+```
+

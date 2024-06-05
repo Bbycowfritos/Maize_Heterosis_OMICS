@@ -1,0 +1,1940 @@
+---
+title: "tissue_RNA_correlation"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+gamercut <- gamer[gamer$db_object_id %in% datOutput$Gene,]
+RNA_HHP <- read.csv("WGCNA_HHP_RNA_summary.csv")
+```
+#read in tissue RNA data
+```{r}
+cpm.6H.data <- readRDS("~/Downloads/rn20b.rds")
+cpm.6H.tm <- cpm.6H.data$tm
+cpm.6H.th <- cpm.6H.data$th
+
+
+cpm.6H.th.ID <- cpm.6H.th[cpm.6H.th$Replicate%in%c(2,3,4) & cpm.6H.th$Tissue=="leaf_V2" & cpm.6H.th$Treatment=="m",]
+cpm.6H <- cpm.6H.tm[cpm.6H.tm$SampleID%in%cpm.6H.th.ID$SampleID,c("gid", "SampleID", "CPM")]
+#reformat df
+cpm.6H <- dcast(cpm.6H, gid ~ SampleID)
+#Rename columns
+colnames(cpm.6H) <- c("Gene", paste(cpm.6H.th.ID$Genotype, cpm.6H.th.ID$Replicate, sep = "."))
+
+#Remove genes not detected in one or mor rep
+cpm.6H[cpm.6H==0] <- NA
+cpm.6H <- na.omit(cpm.6H)
+
+#Calculate averages
+cpm.6H$B73 <- rowMeans(cpm.6H[,c("B73.2", "B73.3", "B73.4")], na.rm = T)
+cpm.6H$B84 <- rowMeans(cpm.6H[,c("B84.2", "B84.3", "B84.4")], na.rm = T)
+cpm.6H$Mo17 <- rowMeans(cpm.6H[,c("Mo17.2","Mo17.3", "Mo17.4")], na.rm = T)
+cpm.6H$A682 <- rowMeans(cpm.6H[,c("A682.2", "A682.3", "A682.4")], na.rm = T)
+cpm.6H$B73xMo17 <- rowMeans(cpm.6H[,c("B73xMo17.2", "B73xMo17.3", "B73xMo17.4")], na.rm = T)
+cpm.6H$Mo17xB73 <- rowMeans(cpm.6H[,c("Mo17xB73.2", "Mo17xB73.3", "Mo17xB73.4")], na.rm = T)
+cpm.6H$B84xB73 <- rowMeans(cpm.6H[,c("B84xB73.2", "B84xB73.3", "B84xB73.4")], na.rm = T)
+cpm.6H$B84xMo17 <- rowMeans(cpm.6H[,c("B84xMo17.2","B84xMo17.3", "B84xMo17.4")], na.rm = T)
+cpm.6H$A682xB73 <- rowMeans(cpm.6H[,c("A682xB73.2", "A682xB73.3", "A682xB73.4")], na.rm = T)
+cpm.6H$A682xMo17 <- rowMeans(cpm.6H[,c("A682xMo17.2", "A682xMo17.3", "A682xMo17.4")], na.rm = T)
+
+cpm.6H <- cpm.6H[-which(rowMeans(cpm.6H[,32:41]) <1),]
+
+#calculate ratio of hybrid to midparent
+cpm.6H$B73xMo17.MP <- cpm.6H$B73xMo17/rowMeans(cpm.6H[,c("B73","Mo17")], na.rm = T)
+cpm.6H$Mo17xB73.MP <- cpm.6H$Mo17xB73/rowMeans(cpm.6H[,c("B73","Mo17")], na.rm = T)
+cpm.6H$B84xB73.MP <- cpm.6H$B84xB73/rowMeans(cpm.6H[,c("B84","B73")], na.rm = T)
+cpm.6H$B84xMo17.MP <- cpm.6H$B84xMo17/rowMeans(cpm.6H[,c("B84","Mo17")], na.rm = T)
+cpm.6H$A682xB73.MP <- cpm.6H$A682xB73/rowMeans(cpm.6H[,c("A682","B73")], na.rm = T)
+cpm.6H$A682xMo17.MP <- cpm.6H$A682xMo17/rowMeans(cpm.6H[,c("A682","Mo17")], na.rm = T)
+
+write.csv(cpm.6H, "cpm.6H_011722.csv", row.names = F)
+
+#Calculate ratio of hybrid to hp
+cpm.6H$B73xMo17.HP <- cpm.6H$B73xMo17/pmax(cpm.6H$B73, cpm.6H$Mo17, na.rm = T)
+cpm.6H$Mo17xB73.HP <- cpm.6H$Mo17xB73/pmax(cpm.6H$B73, cpm.6H$Mo17, na.rm = T)
+cpm.6H$B84xB73.HP <- cpm.6H$B84xB73/pmax(cpm.6H$B73, cpm.6H$B84, na.rm = T)
+cpm.6H$B84xMo17.HP <- cpm.6H$B84xMo17/pmax(cpm.6H$B84, cpm.6H$Mo17, na.rm = T)
+cpm.6H$A682xB73.HP <- cpm.6H$A682xB73/pmax(cpm.6H$B73, cpm.6H$A682, na.rm = T)
+cpm.6H$A682xMo17.HP <- cpm.6H$A682xMo17/pmax(cpm.6H$A682, cpm.6H$Mo17, na.rm = T)
+#LP
+cpm.6H$B73xMo17.LP <- cpm.6H$B73xMo17/pmin(cpm.6H$B73, cpm.6H$Mo17, na.rm = T)
+cpm.6H$Mo17xB73.LP <- cpm.6H$Mo17xB73/pmin(cpm.6H$B73, cpm.6H$Mo17, na.rm = T)
+cpm.6H$B84xB73.LP <- cpm.6H$B84xB73/pmin(cpm.6H$B73, cpm.6H$B84, na.rm = T)
+cpm.6H$B84xMo17.LP <- cpm.6H$B84xMo17/pmin(cpm.6H$B84, cpm.6H$Mo17, na.rm = T)
+cpm.6H$A682xB73.LP <- cpm.6H$A682xB73/pmin(cpm.6H$B73, cpm.6H$A682, na.rm = T)
+cpm.6H$A682xMo17.LP <- cpm.6H$A682xMo17/pmin(cpm.6H$A682, cpm.6H$Mo17, na.rm = T)
+
+#Low parent 
+cpm.6H.LP <- cpm.6H[,c(1,54:59)]
+cpm.6H.LP <- cpm.6H.LP[-grep("ENSRNA", cpm.6H.LP$Gene),]
+cpm.6H.LP <- cpm.6H.LP[order(cpm.6H.LP$B73xMo17.LP),]
+cpm.6H.LLP <- cpm.6H.LP[,2:7] <= 1
+cpm.6H.LLP <- merge.data.frame(cpm.6H.LLP, protein_annot[,c("Gene","Protein")], by.x = "Gene", by.y = "Gene", all.x = T)
+cpm.6H.LLP <- merge.data.frame(SL_GOIs[,c("Gene","Category")], cpm.6H.LLP, by.x = "Gene", by.y  = "Gene", all.y = T)
+cpm.6H.LLP <- cpm.6H.LLP[-which(duplicated(cpm.6H.LLP$B73xMo17.LP)),]
+index_LLP <- which(apply(cpm.6H.LLP, 1, all))
+cpm.6H.LLP <- cpm.6H.LP[index_LLP,]
+
+cpm.6H.HP <- cpm.6H[,c(1,48:53)]
+cpm.6H.HP <- cpm.6H.HP[-grep("ENSRNA", cpm.6H.HP$Gene),]
+```
+
+#RIL data
+```{r}
+cpm.RIL.data <- readRDS("~/Downloads/rn20b2.rds")
+cpm.RIL.tm <- cpm.RIL.data$tm
+cpm.RIL.th <- cpm.RIL.data$th
+
+cpm.RIL.th.ID <- as.data.frame(cpm.RIL.th[cpm.RIL.th$Replicate%in%c(1,2,3,4) & cpm.RIL.th$Tissue=="leaf_V3",])
+
+cpm.RIL <- cpm.RIL.tm[cpm.RIL.tm$SampleID%in%cpm.RIL.th.ID$SampleID,c("gid", "SampleID", "CPM")]
+#reformat df
+cpm.RIL <- dcast(cpm.RIL, gid ~ SampleID)
+#Rename columns
+colnames(cpm.RIL) <- c("Gene", paste(cpm.RIL.th.ID$Genotype, cpm.RIL.th.ID$Replicate, sep = "."))
+
+colnames(cpm.RIL) <- c("Gene", paste(cpm.RIL.th.ID[match(colnames(cpm.RIL[,2:ncol(cpm.RIL)]),cpm.RIL.th.ID$SampleID),"Genotype"],cpm.RIL.th.ID[match(colnames(cpm.RIL[,2:ncol(cpm.RIL)]),cpm.RIL.th.ID$SampleID),"Replicate"], sep = "."))
+
+
+#Remove genes not detected in one or mor rep
+cpm.RIL[cpm.RIL==0] <- NA
+cpm.RIL <- na.omit(cpm.RIL)
+
+#averages 
+cpm.RIL$B73 <- rowMeans(cpm.RIL[,c("B73.1","B73.2", "B73.3", "B73.4")], na.rm = T)
+cpm.RIL$Mo17 <- rowMeans(cpm.RIL[,c("Mo17.1", "Mo17.2","Mo17.3", "Mo17.4")], na.rm = T)
+cpm.RIL$BM <- rowMeans(cpm.RIL[,c("BxM.1", "BxM.2", "BxM.3", "BxM.4")], na.rm = T)
+cpm.RIL$p14 <- rowMeans(cpm.RIL[,c("M0014.1", "M0014.2", "M0014.3", "M0014.4")], na.rm = T)
+cpm.RIL$B14 <- rowMeans(cpm.RIL[,c("M0014xB73.1", "M0014xB73.2", "M0014xB73.3", "M0014xB73.4")], na.rm = T)
+cpm.RIL$M14 <- rowMeans(cpm.RIL[,c("M0014xMo17.1" ,"M0014xMo17.2", "M0014xMo17.3", "M0014xMo17.4")], na.rm = T)
+cpm.RIL$p16 <- rowMeans(cpm.RIL[,c("M0016.1", "M0016.2", "M0016.3", "M0016.4")], na.rm = T)
+cpm.RIL$B16 <- rowMeans(cpm.RIL[,c("M0016xB73.1", "M0016xB73.2", "M0016xB73.3")], na.rm = T)
+cpm.RIL$M16 <- rowMeans(cpm.RIL[,c("M0016xMo17.1", "M0016xMo17.2", "M0016xMo17.3", "M0016xMo17.4")], na.rm = T)
+cpm.RIL$p21 <- rowMeans(cpm.RIL[,c("M0021.1", "M0021.2", "M0021.3", "M0021.4")], na.rm = T)
+cpm.RIL$B21 <- rowMeans(cpm.RIL[,c("M0021xB73.1", "M0021xB73.2", "M0021xB73.3", "M0021xB73.4")], na.rm = T)
+cpm.RIL$M21 <- rowMeans(cpm.RIL[,c("M0021xMo17.1", "M0021xMo17.2", "M0021xMo17.3", "M0021xMo17.4")], na.rm = T)
+cpm.RIL$p317 <- rowMeans(cpm.RIL[,c("M0317.1", "M0317.2", "M0317.3", "M0317.4")], na.rm = T)
+cpm.RIL$B317 <- rowMeans(cpm.RIL[,c("M0317xB73.1", "M0317xB73.2", "M0317xB73.3", "M0317xB73.4")], na.rm = T)
+cpm.RIL$M317 <- rowMeans(cpm.RIL[,c("M0317xMo17.1", "M0317xMo17.2", "M0317xMo17.3", "M0317xMo17.4")], na.rm = T)
+cpm.RIL <- cpm.RIL[-which(rowMeans(cpm.RIL[,61:75]) <1),]
+
+cpm.RIL$BM_MP <- cpm.RIL$BM/rowMeans(cpm.RIL[,c("B73","Mo17")], na.rm = T)
+cpm.RIL$B14_MP <- cpm.RIL$B14/rowMeans(cpm.RIL[,c("B73","p14")],na.rm = T)
+cpm.RIL$M14_MP <- cpm.RIL$M14/rowMeans(cpm.RIL[,c("Mo17","p14")],na.rm = T)
+cpm.RIL$B16_MP <- cpm.RIL$B16/rowMeans(cpm.RIL[,c("B73","p16")],na.rm = T)
+cpm.RIL$M16_MP <- cpm.RIL$M16/rowMeans(cpm.RIL[,c("Mo17","p16")],na.rm = T)
+cpm.RIL$B21_MP <- cpm.RIL$B21/rowMeans(cpm.RIL[,c("B73","p21")],na.rm = T)
+cpm.RIL$M21_MP <- cpm.RIL$M21/rowMeans(cpm.RIL[,c("Mo17","p21")],na.rm = T)
+cpm.RIL$B317_MP <- cpm.RIL$B317/rowMeans(cpm.RIL[,c("B73","p317")],na.rm = T)
+cpm.RIL$M317_MP <- cpm.RIL$M317/rowMeans(cpm.RIL[,c("Mo17","p317")],na.rm = T)
+```
+
+#bzip60
+```{r}
+cpm.all_bzip60 <- cpm.all[cpm.all$Gene == "Zm00001d046718",]
+rownames(cpm.all_bzip60) <- cpm.all_bzip60$Gene
+cpm.all_bzip60 <- cpm.all_bzip60[,-23]
+cpm.all_bzip60 <- cpm.all_bzip60[,-1]
+cpm.all_bzip60 <- t(cpm.all_bzip60)
+
+cpm.all_bzip60_all <- cpm.all_bzip60 <- cpm.all[cpm.all$Gene == "Zm00001d046718",]
+rownames(cpm.all_bzip60_all) <- cpm.all_bzip60_all$Gene
+cpm.all_bzip60_all <- cpm.all_bzip60_all[,-1]
+cpm.all_bzip60_all <- t(cpm.all_bzip60_all)
+
+
+cpm.RIL_comparison <- cpm.all
+cpm.RIL_comparison <- cpm.RIL_comparison[,-23]
+rownames(cpm.RIL_comparison) <- cpm.RIL_comparison$Gene
+cpm.RIL_comparison <- cpm.RIL_comparison[,-1]
+cpm.RIL_comparison <- t(cpm.RIL_comparison)
+bzip60_comparison <- as.data.frame(t(cor(cpm.all_bzip60, cpm.RIL_comparison, use = "p")))
+bzip60_comparison_all <- as.data.frame(t(cor(cpm.all_bzip60_all, cpm.RIL_comparison, use = "p")))
+bzip60_comparison_all$Gene <- rownames(bzip60_comparison_all)
+bzip60_comparison_all <- merge.data.frame(bzip60_comparison_all, SL_GOIs[,c("Gene","Category")], by.x = "Gene", by.y = "Gene", all.x = T)
+bzip60_comparison_all <- merge.data.frame(bzip60_comparison_all, candidate_gene[,c(1:2,4:6)], by.x = "Gene", by.y = "Gene", all.x = T)
+bzip60_comparison_all <- merge.data.frame(bzip60_comparison_all, complex_v4[,3:4], by.x = "Gene", by.y = "Gene", all.x = T)
+bzip60_comparison_all <- bzip60_comparison_all[-which(duplicated(bzip60_comparison_all$Zm00001d046718)),]
+bzip60_comparison_all$pvalue <- corPvalueStudent(bzip60_comparison_all$Zm00001d046718,25)
+bzip60_comparison_all <- bzip60_comparison_all[which(bzip60_comparison_all$pvalue <= 0.05),]
+data.frame(t(cpm_all[cpm_all$Gene == "Zm00001d046718",]))
+
+table(bzip60_comparison$Pathway.Category)
+bzip60_comparison_selected <- bzip60_comparison[bzip60_comparison$Pathway.Category %in% select_categories,]
+```
+
+
+```{r}
+write.csv(cpm.RIL, "cpm.RIL_011922.csv")
+
+cpm_RIL <- cpm.RIL[,c(1,61:75)]
+cpm_RIL <- cpm_RIL[,c(1:2,7,10,3,8:9,4,11:12,5,13:14,6,15:16)]
+colnames(cpm_RIL)[2:16] <- all_height[11:25,1]
+colnames(cpm_6H)[2:11] <- all_height[1:10,1]
+
+cpm.RIL$BM.HP <- cpm.RIL$BM/pmax(cpm.RIL$B73, cpm.RIL$Mo17, na.rm = T)
+cpm.RIL$B14.HP <- cpm.RIL$B14/pmax(cpm.RIL$B73, cpm.RIL$p14, na.rm = T)
+cpm.RIL$M14.HP <- cpm.RIL$M14/pmax(cpm.RIL$p14, cpm.RIL$Mo17, na.rm = T)
+cpm.RIL$B16.HP <- cpm.RIL$B16/pmax(cpm.RIL$B73, cpm.RIL$p16, na.rm = T)
+cpm.RIL$M16.HP <- cpm.RIL$M16/pmax(cpm.RIL$Mo17, cpm.RIL$p16, na.rm = T)
+cpm.RIL$B21.HP <- cpm.RIL$B21/pmax(cpm.RIL$B73, cpm.RIL$p21, na.rm = T)
+cpm.RIL$M21.HP <- cpm.RIL$M21/pmax(cpm.RIL$p21, cpm.RIL$Mo17, na.rm = T)
+cpm.RIL$B317.HP <- cpm.RIL$B317/pmax(cpm.RIL$B73, cpm.RIL$p317, na.rm = T)
+cpm.RIL$M317.HP <- cpm.RIL$M317/pmax(cpm.RIL$p317, cpm.RIL$Mo17, na.rm = T)
+
+cpm.RIL$BM.LP <- cpm.RIL$BM/pmin(cpm.RIL$B73, cpm.RIL$Mo17, na.rm = T)
+cpm.RIL$B14.LP <- cpm.RIL$B14/pmin(cpm.RIL$B73, cpm.RIL$p14, na.rm = T)
+cpm.RIL$M14.LP <- cpm.RIL$M14/pmin(cpm.RIL$p14, cpm.RIL$Mo17, na.rm = T)
+cpm.RIL$B16.LP <- cpm.RIL$B16/pmin(cpm.RIL$B73, cpm.RIL$p16, na.rm = T)
+cpm.RIL$M16.LP <- cpm.RIL$M16/pmin(cpm.RIL$Mo17, cpm.RIL$p16, na.rm = T)
+cpm.RIL$B21.LP <- cpm.RIL$B21/pmin(cpm.RIL$B73, cpm.RIL$p21, na.rm = T)
+cpm.RIL$M21.LP <- cpm.RIL$M21/pmin(cpm.RIL$p21, cpm.RIL$Mo17, na.rm = T)
+cpm.RIL$B317.LP <- cpm.RIL$B317/pmin(cpm.RIL$B73, cpm.RIL$p317, na.rm = T)
+cpm.RIL$M317.LP <- cpm.RIL$M317/pmin(cpm.RIL$p317, cpm.RIL$Mo17, na.rm = T)
+
+cpm.RIL.HP <- cpm.RIL[,c(1,76:84)]
+cpm.RIL.HP <- cpm.RIL.HP[-grep("ENSRNA", cpm.RIL.HP$Gene),]
+cpm.RIL.LP <- cpm.RIL[,c(1,85:93)]
+cpm.LP <- merge.data.frame(cpm.6H.LP, cpm.RIL.LP,by.x = "Gene", by.y = "Gene")
+
+
+cpm.HP <- merge.data.frame(cpm.6H.HP, cpm.RIL.HP,by.x = "Gene", by.y = "Gene")
+colnames(cpm.LP)[2:16] <- hyb_traits$X
+rownames(cpm.LP) <- cpm.LP[,1]
+cpm.LP <- cpm.LP[,-1]
+cpm.LP <- t(cpm.LP)
+
+
+cpm.HP <- read.csv("~/Desktop/Lab/Regulator story/test_candidate_gene/CPM_HHP.csv", header = T, stringsAsFactors = F)
+
+cpm_all <- merge.data.frame(cpm_6H,cpm_RIL, by.x = "Gene", by.y = "Gene")
+cpm_all_t <- cpm_all
+rownames(cpm_all_t) <- cpm_all_t[,1]
+cpm_all_t <- cpm_all_t[,-1]
+cpm_all_t <- t(cpm_all_t)
+cpm_all_cor <- as.data.frame(cor(cpm_all_t, all_height[,2]))
+cpm_all_cor$Gene <- rownames(cpm_all_cor)
+```
+
+
+
+#supplementary tables
+```{r}
+cpm.RIL <- read.csv("~/Downloads/pnas.2109332118.sd08.csv")
+cpm.6H <- read.csv("~/Downloads/pnas.2109332118.sd07.csv")
+cpm.RIL[cpm.RIL==0] <- NA
+cpm.RIL <- na.omit(cpm.RIL)
+#averages 
+cpm.RIL$B73 <- rowMeans(cpm.RIL[,c("B73.1","B73.2", "B73.3", "B73.4")], na.rm = T)
+cpm.RIL$Mo17 <- rowMeans(cpm.RIL[,c("Mo17.1", "Mo17.2","Mo17.3", "Mo17.4")], na.rm = T)
+cpm.RIL$BM <- rowMeans(cpm.RIL[,c("BxM.1", "BxM.2", "BxM.3", "BxM.4")], na.rm = T)
+cpm.RIL$p14 <- rowMeans(cpm.RIL[,c("M0014.1", "M0014.2", "M0014.3", "M0014.4")], na.rm = T)
+cpm.RIL$B14 <- rowMeans(cpm.RIL[,c("M0014xB73.1", "M0014xB73.2", "M0014xB73.3", "M0014xB73.4")], na.rm = T)
+cpm.RIL$M14 <- rowMeans(cpm.RIL[,c("M0014xMo17.1" ,"M0014xMo17.2", "M0014xMo17.3", "M0014xMo17.4")], na.rm = T)
+cpm.RIL$p16 <- rowMeans(cpm.RIL[,c("M0016.1", "M0016.2", "M0016.3", "M0016.4")], na.rm = T)
+cpm.RIL$B16 <- rowMeans(cpm.RIL[,c("M0016xB73.1", "M0016xB73.2", "M0016xB73.3")], na.rm = T)
+cpm.RIL$M16 <- rowMeans(cpm.RIL[,c("M0016xMo17.1", "M0016xMo17.2", "M0016xMo17.3", "M0016xMo17.4")], na.rm = T)
+cpm.RIL$p21 <- rowMeans(cpm.RIL[,c("M0021.1", "M0021.2", "M0021.3", "M0021.4")], na.rm = T)
+cpm.RIL$B21 <- rowMeans(cpm.RIL[,c("M0021xB73.1", "M0021xB73.2", "M0021xB73.3", "M0021xB73.4")], na.rm = T)
+cpm.RIL$M21 <- rowMeans(cpm.RIL[,c("M0021xMo17.1", "M0021xMo17.2", "M0021xMo17.3", "M0021xMo17.4")], na.rm = T)
+cpm.RIL$p317 <- rowMeans(cpm.RIL[,c("M0317.1", "M0317.2", "M0317.3", "M0317.4")], na.rm = T)
+cpm.RIL$B317 <- rowMeans(cpm.RIL[,c("M0317xB73.1", "M0317xB73.2", "M0317xB73.3", "M0317xB73.4")], na.rm = T)
+cpm.RIL$M317 <- rowMeans(cpm.RIL[,c("M0317xMo17.1", "M0317xMo17.2", "M0317xMo17.3", "M0317xMo17.4")], na.rm = T)
+#cpm.RIL <- cpm.RIL[-which(rowMeans(cpm.RIL[,61:75]) <1),]
+
+cpm.RIL$BM_MP <- cpm.RIL$BM/rowMeans(cpm.RIL[,c("B73","Mo17")], na.rm = T)
+cpm.RIL$B14_MP <- cpm.RIL$B14/rowMeans(cpm.RIL[,c("B73","p14")],na.rm = T)
+cpm.RIL$M14_MP <- cpm.RIL$M14/rowMeans(cpm.RIL[,c("Mo17","p14")],na.rm = T)
+cpm.RIL$B16_MP <- cpm.RIL$B16/rowMeans(cpm.RIL[,c("B73","p16")],na.rm = T)
+cpm.RIL$M16_MP <- cpm.RIL$M16/rowMeans(cpm.RIL[,c("Mo17","p16")],na.rm = T)
+cpm.RIL$B21_MP <- cpm.RIL$B21/rowMeans(cpm.RIL[,c("B73","p21")],na.rm = T)
+cpm.RIL$M21_MP <- cpm.RIL$M21/rowMeans(cpm.RIL[,c("Mo17","p21")],na.rm = T)
+cpm.RIL$B317_MP <- cpm.RIL$B317/rowMeans(cpm.RIL[,c("B73","p317")],na.rm = T)
+cpm.RIL$M317_MP <- cpm.RIL$M317/rowMeans(cpm.RIL[,c("Mo17","p317")],na.rm = T)
+
+
+
+
+cpm.6H[cpm.6H==0] <- NA
+cpm.6H <- na.omit(cpm.6H)
+
+#Calculate averages
+cpm.6H$B73 <- rowMeans(cpm.6H[,c("B73.2", "B73.3", "B73.4")], na.rm = T)
+cpm.6H$B84 <- rowMeans(cpm.6H[,c("B84.2", "B84.3", "B84.4")], na.rm = T)
+cpm.6H$Mo17 <- rowMeans(cpm.6H[,c("Mo17.2","Mo17.3", "Mo17.4")], na.rm = T)
+cpm.6H$A682 <- rowMeans(cpm.6H[,c("A682.2", "A682.3", "A682.4")], na.rm = T)
+cpm.6H$B73xMo17 <- rowMeans(cpm.6H[,c("B73xMo17.2", "B73xMo17.3", "B73xMo17.4")], na.rm = T)
+cpm.6H$Mo17xB73 <- rowMeans(cpm.6H[,c("Mo17xB73.2", "Mo17xB73.3", "Mo17xB73.4")], na.rm = T)
+cpm.6H$B84xB73 <- rowMeans(cpm.6H[,c("B84xB73.2", "B84xB73.3", "B84xB73.4")], na.rm = T)
+cpm.6H$B84xMo17 <- rowMeans(cpm.6H[,c("B84xMo17.2","B84xMo17.3", "B84xMo17.4")], na.rm = T)
+cpm.6H$A682xB73 <- rowMeans(cpm.6H[,c("A682xB73.2", "A682xB73.3", "A682xB73.4")], na.rm = T)
+cpm.6H$A682xMo17 <- rowMeans(cpm.6H[,c("A682xMo17.2", "A682xMo17.3", "A682xMo17.4")], na.rm = T)
+
+#cpm.6H <- cpm.6H[-which(rowMeans(cpm.6H[,32:41]) <1),]
+
+#calculate ratio of hybrid to midparent
+cpm.6H$B73xMo17.MP <- cpm.6H$B73xMo17/rowMeans(cpm.6H[,c("B73","Mo17")], na.rm = T)
+cpm.6H$Mo17xB73.MP <- cpm.6H$Mo17xB73/rowMeans(cpm.6H[,c("B73","Mo17")], na.rm = T)
+cpm.6H$B84xB73.MP <- cpm.6H$B84xB73/rowMeans(cpm.6H[,c("B84","B73")], na.rm = T)
+cpm.6H$B84xMo17.MP <- cpm.6H$B84xMo17/rowMeans(cpm.6H[,c("B84","Mo17")], na.rm = T)
+cpm.6H$A682xB73.MP <- cpm.6H$A682xB73/rowMeans(cpm.6H[,c("A682","B73")], na.rm = T)
+cpm.6H$A682xMo17.MP <- cpm.6H$A682xMo17/rowMeans(cpm.6H[,c("A682","Mo17")], na.rm = T)
+
+cpm_all <- merge.data.frame(cpm.6H, cpm.RIL, by.x = "Gene", by.y = "Gene")
+cpm_all <- cpm_all[-which(rowMeans(cpm_all[,c(32:41,107:121)]) <= 1),]
+cpm_all <- cpm_all[-grep("ENSRNA", cpm_all$Gene),]
+
+cpm_all <- cpm_all[,c(1,42:47,122:130)]
+```
+
+#PNAS supplementary tables
+```{r}
+Sd06_RIL <- read.csv("~/Downloads/pnas.2109332118.sd08.csv")
+Sd06_RIL[Sd06_RIL$Gene == "ZeamMr001",]
+```
+
+#RILs
+```{r}
+cpm.RIL.data <- readRDS("~/Downloads/rn20b2.rds")
+cpm.RIL.tm <- cpm.RIL.data$tm
+cpm.RIL.th <- cpm.RIL.data$th
+
+cpm.RIL.th.ID <- as.data.frame(cpm.RIL.th[cpm.RIL.th$Replicate%in%c(1,2,3,4) & cpm.RIL.th$Tissue=="leaf_V3",])
+
+cpm.RIL <- cpm.RIL.tm[cpm.RIL.tm$SampleID%in%cpm.RIL.th.ID$SampleID,c("gid", "SampleID", "CPM")]
+#reformat df
+cpm.RIL <- dcast(cpm.RIL, gid ~ SampleID)
+#Rename columns
+colnames(cpm.RIL) <- c("Gene", paste(cpm.RIL.th.ID$Genotype, cpm.RIL.th.ID$Replicate, sep = "."))
+
+#Remove genes not detected in one or mor rep
+cpm.RIL[cpm.RIL==0] <- NA
+cpm.RIL <- na.omit(cpm.RIL)
+
+cpm.RIL[cpm.RIL$Gene == "ZeamMr001",2:ncol(cpm.RIL)]
+```
+
+#root HMP
+```{r}
+root_HMP <- cpm.6H[,c(1,41:46)]
+root_HHP <- cpm.6H[,c(1,47:52)]
+root_HMP <- root_HMP[-grep("ENSRNA", root_HMP$Gene),]
+root_HHP <- root_HHP[-grep("ENSRNA", root_HHP$Gene),]
+rownames(root_HMP) <- root_HMP$Gene
+rownames(root_HHP) <- root_HHP$Gene
+root_HMP <- root_HMP[,-1]
+root_HHP <- root_HHP[,-1]
+root_HMP <- t(root_HMP)
+root_HHP <- t(root_HHP)
+rownames(root_HMP) <- rownames(hyb_traits)[1:6]
+rownames(root_HHP) <- rownames(hyb_traits)[1:6]
+root_HMP_cor <- cor(root_HMP, hyb_traits[1:6,])
+root_HMP_cor <- as.data.frame(root_HMP_cor)
+root_HMP_cor$Gene <- rownames(root_HMP_cor)
+root_HHP_cor <- cor(root_HHP, HP_traits[1:6,])
+write.csv(root_HHP_cor, "root_HHP_cor.csv")
+write.csv(root_HMP_cor, "root_HMP_cor.csv")
+
+
+
+root_HHP_cor_high <- root_HHP_cor[,1:7] > 0.5
+root_HHP_cor_low <- root_HHP_cor[,1:7] < -0.5
+index_HHP <- which(apply(root_HHP_cor_low, 1, all))
+root_HHP_cor_high <- as.data.frame(root_HHP_cor[index_HHP,])
+root_HHP_cor_low <- as.data.frame(root_HHP_cor[index_HHP,])
+root_HHP_cor_sl <- rbind(root_HHP_cor_low, root_HHP_cor_high)
+root_HHP_cor_sl$Gene <- rownames(root_HHP_cor_sl)
+root_HHP_cor_sl <- merge.data.frame(root_HHP_cor_sl, protein_annot[,2:3], by.x = "Gene", by.y = "Gene", all.x = T)
+root_HHP_cor_sl <- merge.data.frame(root_HHP_cor_sl, SL_GOIs[,c(1,4)], by.x = "Gene", by.y = "Gene", all.x = T)
+
+root_HHP_cor_sl <- root_HHP_cor_sl[-which(duplicated(root_HHP_cor_sl$seed_weight)),]
+
+root_HHP_cor_sl$colors <- "blue"
+root_HHP_cor_sl[which(rowMeans(root_HHP_cor_sl[,2:8])>0), "colors"] <- "red"
+root_HHP_cor_sl$genesignificance <- sl_colors$geneTraitSignificance
+root_HHP_cor_sl$modulecolors <- sl_colors$moduleColors
+
+
+root_HHP_sl <- root_HHP[,root_HHP_cor_sl$Gene]
+
+write.csv(root_HHP_cor_sl, "root_HHP_highcor.csv")
+
+
+sl_colors <- data.frame(colnames(root_HHP_sl))
+colnames(sl_colors)[1] <- "Gene"
+sl_colors <- merge.data.frame(sl_colors, datOutput[,c("ProbeID","moduleColors","geneTraitSignificance")], by.x = "Gene", by.y = "ProbeID", all.x = T, all.y = F)
+sl_colors[which(is.na(sl_colors$moduleColors)), "moduleColors"] <- "black"
+sl_colors$colors <- root_HHP_cor_sl$colors
+
+par(mar = c(5,25,3,16))
+tiff(filename='root_hhp_cor_high.tiff', width = 1200, height = 800)
+heatmap.2(root_HHP_sl, Colv = T, reorderfun=function(d,w) reorder(d,w,agglo.FUN = mean), dendrogram = "both" ,scale = "none", trace = "none", density.info = "none",  ColSideColors = sl_colors$moduleColors, col = my_palette, breaks = colors,cexRow = 1.5, keysize = 1,key.xlab = "HYB/HP", cexCol = 0.8,margins=c(10,8), colCol = root_HHP_cor_sl$colors)
+
+graphics.off()
+rank_traits <- data.frame(matrix(NA, nrow = 6, ncol = 7))
+for (i in 1:ncol(rank_traits)){
+  rank_traits[,i] <- rank(hyb_traits[1:6,i],ties.method = "max" )
+}
+rownames(rank_traits) <- rownames(hyb_traits)[1:6]
+colnames(rank_traits) <- colnames(hyb_traits)
+ 
+colMeans(root_HMP_cor[root_HMP_cor[,7] >0.8,])
+ 
+root_HMP_GO <- GO_enrichment(DF = root_HHP_cor_sl, onto = ont, nodesize = 1)
+
+GO_root_HMP <- data.frame()
+merged_GO <- data.frame()
+ont <- c("CC", "MF", "BP")
+ for (i in 1:ncol(root_HMP_cor)){
+  df <- root_HMP_cor[root_HMP_cor[,7] > 0.8,]
+  plant_hgt_GO <- GO_enrichment(DF = df, onto = ont, nodesize = 1)
+  GO_root_HMP <- rbind(GO_root_HMP, df_2)
+}
+ 
+seed_weight_GO$trait <- "seed weight"
+cob_weight_GO$trait <- "cob weight"
+cob_dia_GO$trait <- "cob diameter"
+cob_len_GO$trait <- "cob length"
+ind_seed_weight_GO$trait <- "individual seed weight"
+seed_num_GO$trait <- "seed number"
+plant_hgt_GO$trait <- "plant height"
+root_GO_HMP <- rbind(seed_weight_GO[1:5,], cob_weight_GO[1:5,], cob_dia_GO[1:5,], cob_len_GO[1:5,], ind_seed_weight_GO[1:5,], seed_num_GO[1:5,], plant_hgt_GO[1:5,])
+
+```
+
+#coleo
+```{r}
+coleo_6H_cpm <- read.csv("cpm.6H.coleo.csv")
+coleo_6H_cpm[coleo_6H_cpm == 0] <- NA
+coleo_6H_cpm <- na.omit(coleo_6H_cpm)
+#coleo_6H_cpm[which(is.na(coleo_6H_cpm)),]
+coleo_6H_cpm$parent_hybrid_sig <- ttestFun(coleo_6H_cpm, 2:13,14:31)
+coleo_6H_cpm$hybrid_parent <- rowMeans(coleo_6H_cpm[,14:31])/rowMeans(coleo_6H_cpm[,2:13])
+coleo_6H_cpm <- coleo_6H_cpm[-grep("ENS", coleo_6H_cpm$Gene),]
+#average of each genotype
+coleo_6H_cpm$B73 <- rowMeans(coleo_6H_cpm[,2:4])
+coleo_6H_cpm$B84 <- rowMeans(coleo_6H_cpm[,5:7])
+coleo_6H_cpm$Mo17 <- rowMeans(coleo_6H_cpm[, 8:10])
+coleo_6H_cpm$A682 <- rowMeans(coleo_6H_cpm[,11:13])
+coleo_6H_cpm$BM <- rowMeans(coleo_6H_cpm[,14:16])
+coleo_6H_cpm$MB <- rowMeans(coleo_6H_cpm[,17:19])
+coleo_6H_cpm$B73xB84 <- rowMeans(coleo_6H_cpm[,20:22])
+coleo_6H_cpm$M84 <- rowMeans(coleo_6H_cpm[,23:25])
+coleo_6H_cpm$B682 <- rowMeans(coleo_6H_cpm[,26:28])
+coleo_6H_cpm$M682 <- rowMeans(coleo_6H_cpm[,29:31])
+#MP
+#BM, MB
+coleo_6H_cpm$B73_Mo17_MP_1 <- rowMeans(coleo_6H_cpm[,c("B73.2", "Mo17.2")])
+coleo_6H_cpm$B73_Mo17_MP_2 <- rowMeans(coleo_6H_cpm[,c("B73.3", "Mo17.3")])
+coleo_6H_cpm$B73_Mo17_MP_3 <- rowMeans(coleo_6H_cpm[,c("B73.4", "Mo17.4")])
+coleo_6H_cpm$B73_Mo17_MP <- rowMeans(coleo_6H_cpm[,c("B73", "Mo17")])
+#B84
+coleo_6H_cpm$B73_B84_MP_1 <- rowMeans(coleo_6H_cpm[,c("B73.2", "B84.2")])
+coleo_6H_cpm$B73_B84_MP_2 <- rowMeans(coleo_6H_cpm[,c("B73.3", "B84.3")])
+coleo_6H_cpm$B73_B84_MP_3 <- rowMeans(coleo_6H_cpm[,c("B73.4", "B84.4")])
+coleo_6H_cpm$B73_B84_MP <- rowMeans(coleo_6H_cpm[,c("B73", "B84")])
+#M84
+coleo_6H_cpm$B84_Mo17_MP_1 <- rowMeans(coleo_6H_cpm[,c("B84.2","Mo17.2")])
+coleo_6H_cpm$B84_Mo17_MP_2 <- rowMeans(coleo_6H_cpm[,c("B84.3","Mo17.3")])
+coleo_6H_cpm$B84_Mo17_MP_3 <- rowMeans(coleo_6H_cpm[,c("B84.4","Mo17.4")])
+coleo_6H_cpm$B84_Mo17_MP_1 <- rowMeans(coleo_6H_cpm[,c("B84","Mo17")])
+#
+```
+
+#GO function
+```{r}
+#GO_enrichment <- function(DF, onto, nodesize = 1){
+  #for (i in 1:length(ont)){
+  
+gene2GO_TissueCut <- split((as.character(gamercut$term_accession)),gamercut$db_object_id)
+  gene2GOb_TissueCut <- gene2GO_TissueCut[-2]
+  str(head(gene2GOb_TissueCut))
+  geneNames_tissuecut <- names(gene2GOb_TissueCut)
+  myInterestingGenes <- dim2_top500
+  geneList <- factor(as.integer(geneNames_tissuecut %in% myInterestingGenes))
+  names(geneList) <- geneNames_tissuecut
+  GOdata <- new("topGOdata", ontology = "BP", allGenes = geneList, annot = annFUN.gene2GO, nodeSize=1, gene2GO = gene2GOb_TissueCut)
+
+
+
+resultFis <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+test.statF <- new("classicCount", testStatistic = GOFisherTest, name = "Fisher test")
+resultFisher <- getSigGroups(GOdata, test.statF)
+test.statKS <- new("classicScore", testStatistic = GOKSTest, name = "KS tests")
+resultKS <- getSigGroups(GOdata, test.statKS)
+test.statRW <- new("weightCount", testStatistic = GOFisherTest, name = "Fisher test", sigRatio = "ratio")
+resultWeight <- getSigGroups(GOdata, test.statRW)
+Dim2_go_bp <- GenTable(GOdata, classic = resultFis, KS = resultKS, weight = resultWeight, orderBy = "classic", ranksOf = "classic", topNodes = 15)
+
+
+
+```
+
+
+#find most overexpressed HMP
+```{r}
+
+```
+
+```{r}
+hub_BP_pos$Term <- factor(hub_BP_pos$Term, levels = c())
+```
+
+
+#plot go enrichment 
+```{r}
+#ggdata <- negative_GO_select
+#ggdata <- ggdata[order(ggdata$number),]
+ggplot(hub_BP_pos,
+  aes(y =Term, color = -log10(pvalue_adjusted), x = module)) +
+expand_limits(y = 0) +
+  geom_point(size = 3) +
+  #scale_x_discrete()+
+  
+  #scale_x_break(c("RNA 4","Protein 1"))
+  #scale_shape_manual(values = c("Protein" = 21,"RNA" = 23))+
+  #scale_size(range = c(2,6)) +
+  #scale_color_manual(values = c("RNA module 1" = 'darkgreen', "RNA module 2" = "darkslateblue","RNA module 3" = "brown"))+
+ scale_color_gradient(low = "darkblue",high = "darkorange")+
+  xlab('Positively-correlated Module') + 
+  ylab('') +
+ scale_y_discrete(limits = factor(hub_BP_pos$Term, levels = c(unique(hub_BP_pos$Term))), expand = c(0,0.5))+
+
+  theme_light()+
+  theme(panel.spacing = unit(0.5,"mm"), axis.text.y = element_text(size = 8, color = "black"), legend.title = element_text(size = 8), strip.text = element_text(color = "black", size = 10), legend.box.spacing = unit(0,"mm"))+
+   facet_wrap(~type) +
+  guides(fill = guide_legend(title = "Adjusted pvalue"))+
+  
+ scale_x_continuous(breaks = c(1:4), expand = c(0.2,0.2))
+   #scale_x_continuous(expand = c(0.5,0))
+#theme(aspect.ratio = 1)+
+
+ 
+
+  #labs(
+    #title = 'GO enrichment of positively correlated modules ',
+    #subtitle = 'Top terms ordered by adjusted p-value') +
+
+ # geom_hline(yintercept = c(-log10(0.05), -log10(0.01), -log10(0.001)),
+    #linetype = c("dotted", "longdash", "solid"),
+    #colour = c("black", "black", "black"),
+    #size = c(0.5, 1.5, 3)) +
+
+  theme_bw(base_size = 24) +
+  theme(
+    legend.position = 'right',
+    legend.background = element_rect(),
+    plot.title = element_text(angle = 0, size = 10, face = 'bold', vjust = 1),
+    plot.subtitle = element_text(angle = 0, size = 10, face = 'bold', vjust = 1),
+    plot.caption = element_text(angle = 0, size = 9, face = 'bold', vjust = 1),
+
+    axis.text.x = element_text(angle = 90, size = 7, face = 'bold', hjust = 1, color = "black"),
+    axis.text.y = element_text(angle = 0, size = 7dati, face = 'bold', vjust = 0.5, color = "black"),
+    axis.title = element_text(size = 6, face = 'bold'),
+    axis.title.x = element_text(size = 8, face = 'bold'),
+    axis.title.y = element_text(size = 7, face = 'bold'),
+    axis.line = element_line(colour = 'black'),
+
+    #Legend
+    legend.key = element_blank(), # removes the border
+    legend.key.size = unit(0.5, "cm"), # Sets overall area/size of the legend
+    legend.text = element_text(size = 7, face = "bold"), # Text size
+    title = element_text(size = 7, face = "bold"),
+    strip.text = element_text(size = 7))  + coord_flip()+
+
+  facet_grid(~ontology, scales = "free") 
+
+```
+
+#plot go enrichment_2
+```{r}
+ggplot(Protein_GO_negative,
+  aes(x = Term_organized, y =-log10(p.adj),shape = Type,size = percent_significant, fill = module, color = module)) +
+ #expand_liits(x = 1) +
+  #geom_point(color = "black") +
+  geom_point(aes(fill = module, color = module,size = percent_significant), color = "black", alpha = 0.9)+
+  scale_shape_manual(values = c("Protein" = 21,"RNA" = 23),name = "")+
+  scale_size(range = c(2,5),name = "Percent of significant genes") +
+  scale_fill_manual(values = c("Protein module 24" = 'green', "Protein module 27" = "brown", "RNA module 29" = "bisque4","RNA module 30" = "darkslateblue"),name = "Module") + ylim(1,10)+ 
+  guides(fill=guide_legend(override.aes=list(shape=21)))+
+  #scale_color_manual(values = c("Protein module 1" = 'mustard', "Protein module 3" = "turquoise","Protein module 4" = "red", "RNA module 1" = "magenta","RNA module 2" = "brown2"))+
+  #scale_color_identity(breaks = c("yellow","turquoise","red","magenta","brown2"), labels = c("Protein module 1", "Protein module 3", "Protein module 4", "RNA module 1", "RNA module 2"),guide = "legend")+
+ 
+
+  xlab('') + ylab('-log10 Bonferroni adjusted p-value') +
+  #scale_x_discrete(limit = Protein_GO_positive_selected$Term_organized, expand = c(0.1,0.1))+
+ 
+
+  #labs(
+    #title = 'GO enrichment of positively correlated modules ',
+    #subtitle = 'Top terms ordered by adjusted p-value') +
+
+ # geom_hline(yintercept = c(-log10(0.05), -log10(0.01), -log10(0.001)),
+    #linetype = c("dotted", "longdash", "solid"),
+    #colour = c("black", "black", "black"),
+    #size = c(0.5, 1.5, 3)) +
+
+  theme_bw(base_size = 24) +
+  theme(
+    legend.position = 'right',
+    legend.background = element_rect(),
+    plot.title = element_text(angle = 0, size = 10, face = 'bold', vjust = 1),
+    plot.subtitle = element_text(angle = 0, size = 10, face = 'bold', vjust = 1),
+    plot.caption = element_text(angle = 0, size = 7, face = 'bold', vjust = 1),
+
+    axis.text.x = element_text(angle = 90, size = 8, face = 'bold', hjust = 1, color = "black"),
+    axis.text.y = element_text(angle = 0, size = 7, face = 'bold', vjust = 0.5, colour = "black"),
+    axis.title = element_text(size = 6, face = 'bold'),
+    axis.title.x = element_text(size = 6, face = 'bold'),
+    axis.title.y = element_text(size = 6, face = 'bold'),
+    axis.line = element_line(colour = 'black'),
+
+    #Legend
+    legend.key = element_blank(), # removes the border
+    legend.key.size = unit(0.02, "cm"), # Sets overall area/size of the legend
+    legend.spacing = unit(0,"cm"),
+    legend.box.spacing = unit(0.3,"cm"),
+    legend.text = element_text(size = 6, face = "bold"), # Text size
+    title = element_text(size = 6, face = "bold"),
+    strip.text = element_text(size = 7))  + coord_flip()
+#+
+
+  #facet_wrap( scales = "free") 
+
+
+
+
+
+
+
+```
+
+#network for hhp
+```{r}
+#adjacency
+softPower = 15 #see figure in last chunk
+adjacency<-WGCNA::adjacency(cpm.HP, power = softPower, type = "signed")
+dissTOM<-  TOMdist(adjacency)
+
+# hierarchical clustering
+geneTree= hclust(as.dist(dissTOM), method = "average")
+# define the modules by cutting branches
+moduleLabelsManual1 = cutreeDynamic(dendro = geneTree, distM = dissTOM, method = "hybrid", 
+    deepSplit = 2, pamRespectsDendro = F, minClusterSize = 30)
+moduleColorsManual1 = labels2colors(moduleLabelsManual1)
+
+# Calculate eigengenes
+MEList <- moduleEigengenes(cpm.HP, colors = moduleColorsManual1)
+MEs <- MEList$eigengenes
+
+#cut tree to merge modules
+MEDissThres = 0.3
+# Call an automatic merging function
+merge = mergeCloseModules(cpm.HP, moduleColorsManual1, cutHeight = MEDissThres)
+# The merged module colors
+mergedColors = merge$colors
+# Eigengenes of the new merged modules:
+mergedMEs = merge$newMEs
+
+moduleColors = mergedColors
+
+# Define numbers of genes and samples
+nGenes = ncol(cpm.HP)
+nSamples = nrow(cpm.HP)
+# Recalculate MEs with color labels
+MEs0 = moduleEigengenes(cpm.HP, moduleColors)$eigengenes
+MEs = orderMEs(MEs0)
+#write.csv(MEs,"HHP_RNA_MEs.csv")
+moduleTraitCor = cor(MEs,HP_traits,use = "p")
+moduleTraitPvalue = corPvalueStudent(moduleTraitCor, nSamples)
+moduleTraitSummary <- cbind(moduleTraitCor, moduleTraitPvalue)
+write.csv(moduleTraitSummary, "HHP_RNA_modulesummary.csv")
+textMatrix = paste(signif(moduleTraitCor, 2), "\n(",
+                        signif(moduleTraitPvalue, 1), ")", sep = "")
+par(mar = c(7, 15, 2, 1))
+labeledHeatmap(moduleTraitCor,
+            xLabels = colnames(moduleTraitCor),
+             yLabels = names(MEs),
+           ySymbols = names(MEs),
+            colorLabels = T,
+             colors = blueWhiteRed(50),
+             textMatrix = textMatrix,
+             setStdMargins = FALSE,
+             cex.text = 0.3,
+            zlim = c(-1,1), cex.lab.y = 0.7,
+             main = paste("Module-trait relationships"))
+```
+
+#HHP network GO enrichment
+```{r}
+mediumpurple <- merge_module_GO(a = "mediumpurple", b = "kMEmediumpurple", c = gamercut, ont = ont)
+#magenta3$moduleColors <- "magenta3"
+aliceblue <- merge_module_GO(a = "aliceblue", b = "kMEaliceblue", c = gamercut, ont = ont)
+#darkred$moduleColors <- "darkred"
+honeydew <- merge_module_GO(a = "honeydew", b = "kMEhoneydew", c = gamercut, ont = ont)
+coral3 <- merge_module_GO(a = "coral3", b ="kMEcoral3", c = gamercut, ont = ont)
+HHP_GO <- rbind(magenta3,darkred,lightcyan1)
+HHP_GO <- HHP_GO[order(HHP_GO$classic_num),]
+HHP_GO <- HHP_GO[c(1:17,71:90),]
+HHP_GO <- HHP_GO[c(1:17,19,21,27,37),]
+HHP_GO <- HHP_GO[-(13:17),]
+```
+
+#find hub genes
+```{r}
+honeydew_hub <- honeydew_all[!honeydew_all$kMEhoneydew <= 0.85,]
+honeydew_hub <- honeydew_hub[!honeydew_hub$G.S_height <= 0.7,]
+
+
+HHP_hub <- rbind(magenta3_hub,lightcyan1_hub,darkred_hub)
+HHP_hub$G.S_abs <- abs(HHP_hub$G.S_height)
+HHP_hub <- HHP_hub[order(HHP_hub$G.S_abs),]
+HHP_hub_top10 <- HHP_hub[67:76,]
+datOutput_merged <- datOutput_merged[order(datOutput_merged$G.S_abs),]
+datOutput_merged$G.S_abs <- abs(datOutput_merged$G.S_height)
+GS_top10 <- datOutput_merged[17360:17369,]
+GS_top10 <- GS_top10[order(GS_top10$G.S_height),]
+intersect(GS_top10$Gene,HHP_hub_top10$Gene)
+HHP_hub_10_matrix <- cpm.HP[,HHP_hub_top10$Gene]
+GS_10_matrix <- cpm.HP[,GS_top10$Gene]
+HHP_hub_10_matrix$HHP.height <- HP_traits$hgt
+GS_10_matrix$HHP.height <- HP_traits$hgt
+HHP_hub_top10 <- HHP_hub_top10[order(HHP_hub_top10$G.S_height),]
+
+model_hub <- lm(HHP.height ~
+                  
+Zm00001d027354+Zm00001d044849+Zm00001d045570+Zm00001d017096+Zm00001d049954+Zm00001d017449+Zm00001d051796+Zm00001d015837+Zm00001d018959+Zm00001d047238,
+              data = HHP_hub_10_matrix)
+summary(model_hub)
+my.formula <- y ~ x
+ggplot(HHP_hub_10_matrix, aes(x =                          -Zm00001d027354-Zm00001d044849-Zm00001d045570-Zm00001d017096-Zm00001d049954+Zm00001d017449+Zm00001d051796+Zm00001d015837+Zm00001d018959+Zm00001d047238
+, y = HHP.height)) +geom_point() +
+  stat_smooth(method='lm') +xlab("top 10 cor hub gene")
+#stat_poly_eq(formula = my.formula, aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")), parse = TRUE) 
+
+
+model_rank <- lm(HHP.height ~ Zm00001d051457+Zm00001d054001+Zm00001d000021+Zm00001d028820+Zm00001d027354+Zm00001d003495+Zm00001d044849+
+Zm00001d018959+Zm00001d047238+Zm00001d027451,
+    data = GS_10_matrix)
+summary(model_rank)
+ggplot(GS_10_matrix, aes(x =Zm00001d018959+Zm00001d047238+Zm00001d027451+Zm00001d015693+ Zm00001d044287
+                           #-Zm00001d051457-Zm00001d054001-Zm00001d000021-Zm00001d028820-Zm00001d027354#-Zm00001d003495-Zm00001d044849
+                  #Zm00001d018959+Zm00001d047238+Zm00001d027451
+                  ,y = HHP.height)) +geom_point() +
+  stat_smooth(method='lm') +xlab("top 5 pos ranked gene by cor") 
+#stat_poly_eq(formula = my.formula, aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")), parse = TRUE) 
+
+```
+
+#expression heatmap
+```{r}
+colors = seq(0.6,1.2,length = 301)
+my_palette <- colorRampPalette(c("yellow","gray","darkblue"))(n = 300)
+par(mar = c(5,25,3,10))
+tiff(filename='HHP_RNA_hub_HHP.tiff', width = 1200, height = 800)
+heatmap.2(HHP_hub_matrix, Colv = T,dendrogram = "both",scale = "none", trace = "none", density.info = "none", reorderfun=function(d,w) reorder(d,w,agglo.FUN = min),distfun=function(x) dist(x,method="euclidean"),hclustfun=function(x) 
+  hclust(x, method="ward.D2"), col = my_palette, breaks = colors, cexRow = 3.5,offsetRow = 0.2, margins = c(7,7.5), labCol = NA, keysize = 0.6,key.xlab = "HYB/MP",key.xtickfun=function() {
+               cex <- par("cex")*par("cex.axis")
+               side <- 1
+               line <- 0
+               col <- par("col.axis")
+               font <- par("font.axis")
+               mtext("<0.8", side=side, at=0, adj=0,
+                     line=line, cex=0.9, col=col, font=font)
+              mtext("1", side=side, at=0.5, adj=0.5,
+                     line=line, cex=0.9, col=col, font=font)
+               mtext(">1.2", side=side, at=1, adj=1,
+                     line=line, cex=0.9, col=col, font=font)
+               return(list(labels=FALSE, tick=FALSE))
+          })
+
+
+graphics.off()
+```
+#isolate specific modules
+```{r}
+honeydew_all <- datOutput_merged[datOutput_merged$moduleColors == "honeydew", ]
+honeydew_all <- honeydew_all[!honeydew_all$kMEhoneydew <= 0.4,]
+honeydew_all <- honeydew_all[,c(1:3,32,53:54)]
+coral1_all <- datOutput_merged[datOutput_merged$moduleColors == "coral1", ]
+honeydew_all <- read.csv("HHP_module_1.csv")
+honeydew_all <- honeydew_all[,1:6]
+#bisque4
+bisque4_all <- RNA_HMP[RNA_HMP$moduleColors == "bisque4",]
+bisque4_all <- bisque4_all[,c(2:4,18,36:37)]
+bisque4_all <- merge.data.frame(bisque4_all, corncyc, by.x = "Gene", by.y = "Gene.ID", all.x = T)
+#bisque4_all <- merge.data.frame(bisque4_all, complex_v4[,2:3], by.x = "Gene", by.y = "v4_gene_model", all.x = T)
+bisque4_all <- merge.data.frame(bisque4_all,candidate_gene[,c(1:3,5)], by.x = "Gene", by.y = "Accession", all.x = T)
+bisque4_all <- merge.data.frame(bisque4_all,negative_candidate[,c(1,4,5)], by.x = "Gene", by.y = "Accession", all.x = T)
+bisque4_all <- bisque4_all[-which(duplicated(bisque4_all$geneTraitSignificance)),]
+bisque4_all <- bisque4_all[!bisque4_all$kMEbisque4 <= 0.4,]
+write.csv(bisque4_all, "RNA_bisque4.csv")
+#darkslateblue
+darkslateblue_all <- RNA_HMP[RNA_HMP$moduleColors == "darkslateblue",]
+darkslateblue_all <- darkslateblue_all[,c(2:4,23,36:37)]
+darkslateblue_all <- merge.data.frame(darkslateblue_all, corncyc, by.x = "Gene", by.y = "Gene.ID", all.x = T)
+darkslateblue_all <- merge.data.frame(darkslateblue_all, candidate_gene[,c(1:3,5)], by.x = "Gene", by.y = "Accession", all.x = T)
+#darkslateblue_all <- merge.data.frame(darkslateblue_all, complex_v4[,2:3], by.x = "Gene", by.y = "v4_gene_model", all.x = T)
+darkslateblue_all <- merge.data.frame(darkslateblue_all, negative_candidate[,c(1,4,5)], by.x = "Gene", by.y = "Accession", all.x = T)
+darkslateblue_all <- darkslateblue_all[-which(duplicated(darkslateblue_all$geneTraitSignificance)),]
+darkslateblue_all <- darkslateblue_all[!darkslateblue_all$kMEdarkslateblue <= 0.4,]
+darkslateblue_all <- darkslateblue_all[,c(1,6,7,2,3,4,5)]
+write.csv(darkslateblue_all,"RNA_darkslateblue.csv")
+
+
+
+cpm.HP[,darkred_hub$Gene]
+
+MEs_model <- MEs
+MEs_model$HP.height <- HP_traits[,7]
+model <- lm(HP.height ~ MEdarkred+MElightcyan1, data = MEs_model)
+summary(model)
+
+my.formula <- y ~ x
+ggplot(MEs_model, aes(x = MElightcyan1-MEdarkred-MEmagenta3, y = HP.height)) +geom_point()  +
+geom_smooth(method='lm', formula= my.formula, se = F)  #stat_poly_eq(formula = my.formula, aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")), parse = TRUE) 
+```
+
+#check mitochondria localized 
+```{r}
+#Wang et al
+mito_id <- read.csv("~/Desktop/Lab/Regulator story/test_candidate_gene/mito_localized_gid.csv", header = T, stringsAsFactors = F)
+colnames(mito_id)[2] <- "accession"
+v4_annot_v3 <- v4_annot[,c(1,11)]
+mito_id <- merge.data.frame(mito_id, v4_annot_v3, by.x = "accession",by.y = "v3_gene_model", all.x = T)
+mito_id_1 <- as.data.frame(mito_id$v4_gene_model)
+colnames(mito_id_1)[1] <- "v4"
+mito_HHP <- mito_id[mito_id$v4_gene_model %in% datOutput_merged$Gene, c("v4_gene_model","Functional.category")]
+mito_HHP <- merge.data.frame(mito_HHP, datOutput_merged[,c("Gene","moduleColors","G.S_height","Protein")], by.x = "v4_gene_model",by.y = "Gene", all.x = T)
+mito_HHP_select <- mito_HHP[mito_HHP$moduleColors %in% select_module_mito,]
+ggplot(datOutput_merged, aes(x = G.S_height, y = moduleColors)) + geom_density_ridges() + xlim(-1,1) 
+#+scale_color_manual(values = c("magenta3" = "magenta3", "lightcyan1" = "lightcyan1"))
+
+darkred_all[darkred_all$Gene %in% mito_id_1$v4_gene_model,c("Protein","G.S_height")]
+
+#laura's mito BP
+mito_BP_ldb <- read.csv("~/Downloads/mito_BP_2f.csv", header = F, stringsAsFactors = F, na.strings=c("","NA"))
+mito_BP_ldb_1 <- mito_BP_ldb
+mito_BP_ldb_2 <- data.frame()
+
+for (i in 1:ncol(mito_BP_ldb_1)){
+  df_n <- append(df_n,na.omit(mito_BP_ldb[,i]))
+}
+
+df_n <- data.frame(t(df_n))
+colnames(df_n)[1] <- "Accession"
+
+df_n <- data.frame(df_n[-which(duplicated(df_n$Accession)),])
+df_n <- as.data.frame(mito_BP_ldb[1,1])
+df_n$ID <- substr(df_n$Accession, start = 1, stop = 14)
+mito_id_1 <- mito_id_1[-which(is.na(mito_id_1$v4)),]
+intersect(mito_id_1,df_n$ID)
+
+mito_HHP_ldb <- datOutput_merged[datOutput_merged$Gene %in% index,]
+table(mito_HHP_ldb$moduleColors)
+mito_HHP_ldb <- mito_HHP_ldb[mito_HHP_ldb$moduleColors %in% select_module_mito,]
+select_module_mito <- c("blue","cornflowerblue","darkred","lightcyan1","magenta3")
+
+cpm.HP.hub <- cpm.HP[,magenta3_hub$Gene]
+```
+
+#KEGG map
+```{r}
+honeydew_all <- merge.data.frame(honeydew_all, v4_annot[,c("v4_gene_model","Entrez")], by.x = "Gene", by.y = "v4_gene_model", all.x = T)
+
+
+cpm_B682 <- df_sub[5,]
+cpm_B682[2,] <- colnames(cpm_B682)
+cpm_B682 <- data.frame(t(cpm_B682))
+cpm_B682$B682 <- as.numeric(cpm_B682$B682)
+cpm_B682$log2 <- log2(cpm_B682$B682)
+cpm_B682_RNA_bisque4 <- cpm_B682[cpm_B682$Gene %in% bisque4$ProbeID,]
+cpm_B682_RNA_dsb <- cpm_B682[cpm_B682$Gene %in% darkslateblue_all$Gene,]
+cpm_B682_RNA_negative <- rbind(cpm_B682_RNA_bisque4,cpm_B682_RNA_dsb)
+cpm_B682_input <- cpm_B682
+cpm_B682_input  <- merge.data.frame(cpm_B682_input, v4_annot[,c("v4_gene_model","Entrez")], by.x = "X2", by.y = "v4_gene_model")
+cpm_B682_input <- cpm_B682_input[!(cpm_B682_input$Entrez == ""),]
+#cpm_B682_RNA_negative_input <- cpm_B682_RNA_negative[,c(4,3)]
+cpm_B682_input <- cpm_B682_input[,c(3,4)]
+cpm_B682_input <- cpm_B682_input[-which(duplicated(cpm_B682_input$Entrez)),]
+Entrez_name <- cpm_B682_input$Entrez
+cpm_B682_input <- data.frame(cpm_B682_input[,-2])
+rownames(cpm_B682_input) <- Entrez_name
+#colnames(cpm.HP.darkred.input) <- NULL
+
+#cpm.HP.darkred.input <- data.frame(cpm.HP.darkred.input)
+pv.out <- pathview(gene.data = cpm_B682_input, pathway.id="zma04141", species = "zma", out.suffix = "Protein_B682_all")
+
+cpm.6H.LP[cpm.6H.LP$Gene %in% darkred_all$Gene,]
+write.csv(cpm.HP.darkred.input, "pathview_darkred.csv")
+```
+
+#overview figures for Steve 
+```{r}
+protein_tissue <- read.csv("~/Downloads/protein_tissue.csv", header = T, stringsAsFactors = F)
+leaf_HP <- read.csv("~/Downloads/leaf_HP.csv", header = T, stringsAsFactors = F)
+protein_tissue <- merge.data.frame(protein_tissue, leaf_HP, by.x = "Accession", by.y = "Accession")
+protein_tissue_1 <- data.frame(protein_tissue[,2:27] == "#DIV/0!")
+remove_index <- which(apply(protein_tissue_1,1,any))
+protein_tissue_all <- protein_tissue[-remove_index,]
+protein_tissue_all <- merge.data.frame(protein_tissue_all, protein_annot, by.x = "Accession", by.y = "Accession", all.x = T)
+protein_tissue_all$gene <- substr(protein_tissue_all$Accession, start = 1,stop = 14)
+#protein_tissue[,"Accession"] <- substr(protein_tissue$Accession, start = 1, stop = 14)
+protein_tissue_HHP <- protein_tissue_all[,c(1,grep("HHP", colnames(protein_tissue_all)))]
+protein_tissue_HLP <- protein_tissue_all[,c(1,grep("HLP", colnames(protein_tissue_all)))]
+protein_tissue_HHP_1 <- data.frame(protein_tissue_HLP[,2:14] <1)
+
+protein_tissue_count <- data.frame()
+
+for (i in 2:ncol(protein_tissue_HLP)){
+  protein_tissue_count[2,(i-1)] <- nrow(protein_tissue_HLP[protein_tissue_HLP[,i] <1, ])
+}
+colnames(protein_tissue_HHP) <- gsub(pattern = "_HHP", replacement = "", colnames(protein_tissue_HHP))
+colnames(protein_tissue_count) <- colnames(protein_tissue_HHP)[2:14]
+colnames(protein_tissue_count)[12:13] <- c("Seedling leaf", "Mature leaf")
+protein_tissue_count <- data.frame(t(protein_tissue_count))
+colnames(protein_tissue_count)[1:2] <- c("n_HHP","n_HLP")
+protein_tissue_count$percent_HHP <- protein_tissue_count$n_HHP/nrow(protein_tissue_HHP)
+protein_tissue_count$percent_HLP <- protein_tissue_count$n_HLP/nrow(protein_tissue_HLP)
+protein_tissue_count$Tissue <- rownames(protein_tissue_count)
+protein_tissue_percent <- protein_tissue_count[,3:5] %>% 
+  gather(n_HHP,n_HLP,-Tissue)
+colnames(protein_tissue_percent)[2:3] <- c("Type","Value")
+ggplot(protein_tissue_percent, aes(Tissue,Value,fill = Type)) +geom_col(position = "dodge") + scale_fill_manual(values = c("percent_HHP" = "salmon", "percent_HLP" = "seagreen")) + ylab("% all proteins detected across all tissues") +theme_classic()
+apply(protein_tissue_HHP_1, 1, sum)                                              
+protein_HHP_half_count <- data.frame(apply(protein_tissue_HHP_1, 1, sum))
+which(protein_HHP_half_count$apply.protein_tissue_HHP_1..1..sum. >6,)
+
+protein_HHP_half <- protein_tissue_all[which(protein_HHP_half_count$apply.protein_tissue_HHP_1..1..sum. >6,), c("Accession","Gene")]
+colnames(protein_HHP_half)[2] <- "Protein"
+protein_HHP_half$Gene <- substr(protein_HHP_half$Accession, start = 1, stop = 14)
+protein_HHP_half <- merge.data.frame(protein_HHP_half, SL_GOIs[,c("Accession","Category")], by.x = "Accession", by.y = "Accession", all.x = T)
+protein_HHP_half <- merge.data.frame(protein_HHP_half, candidate_gene[,c(1,5)], by.x = "Gene", by.y = "Accession", all.x = T)
+protein_HHP_half <- merge.data.frame(protein_HHP_half, corncyc, by.x = "Gene", by.y = "Gene.ID", all.x = T)
+protein_HHP_half <- merge.data.frame(protein_HHP_half, complex_v4[,2:3], by.x = "Gene", by.y = "v4_gene_model", all.x = T)
+protein_HHP_half <- protein_HHP_half[-grep("only",protein_HHP_half$Accession),]
+protein_HHP_half <- protein_HHP_half[-which(duplicated(protein_HHP_half$Gene)),]
+write.csv(protein_HHP_half, "protein_HHP_half.csv")
+protein_HHP_half_GO <- merge_module_GO(a = protein_HHP_half, c = gamercut, ont = ont)
+protein_HHP_half <- read.csv("protein_HHP_half.csv")
+protein_HHP_half[which(is.na(protein_HHP_half$Pathway)),"Pathway"] <- "Other"
+
+protein_HHP_pathway <- data.frame(table(protein_HHP_half$Pathway))
+ggplot(protein_HHP_pathway,aes(x = "", y = Freq, fill = Var1))+geom_bar(width = 1, stat = "identity") +coord_polar("y", start = 0)+theme(legend.position = "none")
+
+index_protein_HHP <- which(apply(protein_tissue_HHP_1, 1, all))
+
+gsub(pattern = "_HHP", replacement = "", colnames(protein_tissue_HHP))
+```
+
+
+#figures for Steve RNA
+```{r}
+cpm_LP <- read.csv("CPM_LLP.csv")
+cpm_LP <- cpm_LP[,1:2]
+colnames(cpm_LP)[1] <- "Gene"
+cpm_HP_leaf <- data.frame(t(cpm.HP))
+colnames(cpm_HP_leaf) <- cpm_HP_leaf[1,]
+cpm_HP_leaf <- cpm_HP_leaf[-1,]
+cpm_HP_leaf$Accession <- rownames(cpm_HP_leaf)
+cpm_HP_leaf <- cpm_HP_leaf[,c(1,16)]
+cpm_root <- read.csv("cpm.6H.root_BM.csv")
+cpm_root <- cpm_root[,c(1,13:14)]
+cpm_coleo <- read.csv("cpm.6H.coleo_BM.csv")
+cpm_coleo <- cpm_coleo[,c(1,14:15)]
+cpm_coleo <- merge.data.frame(cpm_coleo, cpm_root, by.x = "Gene", by.y = "Gene")
+colnames(cpm_coleo)[1] <- "Accession"
+cpm_tissue_LP <- merge.data.frame(cpm_LP,cpm_coleo[,c(1,3,5)], by.x = "Gene", by.y = "Gene")
+colnames(cpm_tissue_LP)[1:2] <- c("Accession","seedling leaf")
+cpm_tissue_HP <- merge.data.frame(cpm_HP_leaf,cpm_coleo[,c(1,2,4)], by.x = "Accession", by.y = "Accession")
+cpm_tissue_count <- data.frame()
+for (i in 2:ncol(cpm_tissue_LP)){
+  cpm_tissue_count[i+2,4] <- nrow(cpm_tissue_LP[cpm_tissue_LP[,i]<1,])
+}
+colnames(cpm_tissue_count) <- colnames(cpm_tissue_LP)[2:4]
+cpm_tissue_count <- data.frame(t(cpm_tissue_count))
+cpm_tissue_count$percent_HHP <- cpm_tissue_count$X1/nrow(cpm_tissue_LP)
+cpm_tissue_count$percent_HLP <- cpm_tissue_count$X2/nrow(cpm_tissue_LP)
+cpm_tissue_count$Tissue <- rownames(cpm_tissue_count)
+cpm_tissue_count <- cpm_tissue_count[,-(1:2)]
+cpm_tissue_count <- cpm_tissue_count %>% 
+  gather(percent_HHP,percent_HLP,-Tissue)
+colnames(cpm_tissue_count)[2:3] <- c("Type","Value")
+cpm_tissue_count[c(3,6),1] <- "Root"
+cpm_tissue_HP_1 <- cpm_tissue_LP[,2:4] <1
+cpm_HHP_index <- which(apply(cpm_tissue_HP_1, 1, all))
+cpm_tissue_HHP_shared <- cpm_tissue_LP[cpm_HHP_index,]
+cpm_tissue_HHP_shared <- merge.data.frame(cpm_tissue_HHP_shared,protein_annot[,2:3], by.x = "Accession", by.y = "Gene", all.x = T)
+cpm_tissue_HHP_shared <- cpm_tissue_HHP_shared[-which(duplicated(cpm_tissue_HHP_shared$Coleo_HLP)),]
+colnames(cpm_tissue_HHP_shared)[1] <- "Gene"
+cpm_tissue_HHP_shared_GO <- merge_module_GO(a = cpm_tissue_HHP_shared, c = gamercut, ont = ont)
+
+
+ggplot(cpm_tissue_count, aes(Tissue,Value,fill = Type)) +geom_col(position = "dodge") + scale_fill_manual(values = c("percent_HHP" = "salmon", "percent_HLP" = "seagreen")) + ylab("% all mRNAs detected across all tissues") +theme_classic() 
+```
+
+
+#acs mutant
+```{r}
+acs <- read.csv("~/Downloads/acs_mutant.csv")
+colnames(acs)[3] <- "Protein"
+acs$Gene <- substr(acs$Accession, start = 1, stop = 14)
+acs <- acs[-which(acs$acs_B73 == "#DIV/0!"),]
+acs <- acs[-grep("reverse",acs$Accession),]
+acs$module <- "Other"
+acs[acs$Gene %in% brown2_all$Gene, "module"] <- "brown2"
+acs[acs$Gene %in% magenta_all$Gene, "module"] <- "magenta"
+acs[acs$Gene %in% darkslateblue_all$Gene, "module"] <- "darkslateblue"
+acs[acs$Gene %in% bisque4_all$Gene, "module"] <- "bisque4"
+acs <- merge.data.frame(acs,RNA_HMP[,c("Gene","geneTraitSignificance")], by.x = "Gene", by.y = "Gene", all.x = T)
+acs$acs_B73 <- as.numeric(acs$acs_B73)
+acs$l2_acs <- log2(acs$acs_B73)
+acs <- merge.data.frame(acs, cpm_all[,c(1,6,9)], by.x = "Gene", by.y = "Gene", all.x = T)
+acs <- acs[-which(duplicated(acs$geneTraitSignificance)),]
+acs$l2_B682 <- log2(acs$B682)
+acs$l2_B14 <- log2(acs$B14)
+acs_B682 <- rbind(acs_B682, acs[acs$l2_B682 < -0.5 & acs$l2_acs > 0.5, c("Gene","Protein","module","geneTraitSignificance","l2_acs","l2_B682")])
+acs <- merge.data.frame(acs, RNA_HHP[,c("Gene", "G.S_height")], by.x = "Gene", by.y = "Gene", all.x = T)
+acs$module_HHP <- "Other"
+acs[acs$Gene %in% honeydew_all$Gene, "module_HHP"] <- "honeydew"
+acs_GS <- acs[acs$geneTraitSignificance > 0.6|acs$geneTraitSignificance < -0.6, c("Gene","Protein","module","geneTraitSignificance","l2_acs")]
+acs_GS <- acs_GS[acs_GS$l2_acs > 0.5|acs_GS$l2_acs < -0.5, ]
+acs_GS <- acs_GS[-which(is.na(acs_GS$geneTraitSignificance)),]
+acs_GS <- merge.data.frame(acs_GS, candidate_gene[,c(1:3,5)], by.x = "Gene", by.y = "Accession", all.x = T)
+acs_GS <- merge.data.frame(acs_GS, corncyc, by.x = "Gene", by.y = "Gene.ID", all.x = T)
+acs_GS <- merge.data.frame(acs_GS, SL_GOIs[,c("Gene","Category")], by.x = "Gene", by.y = "Gene", all.x = T)
+acs_GS <- merge.data.frame(acs_GS, complex_v4[,2:3], by.x = "Gene", by.y = "v4_gene_model", all.x = T)
+acs_GS <- acs_GS[-which(duplicated(acs_GS$geneTraitSignificance)),]
+write.csv(acs_GS,"acs_GS.csv")
+ggplot(acs, aes(x = l2_acs, y = G.S_height, color = module_HHP)) +geom_point(size = 0.7,alpha = 0.7) + scale_color_manual(values = c("honeydew" = "black", "Other" = "grey")) +
+  #scale_color_manual(values = c("Other" = "lightgrey", "brown2" = "brown", "magenta" = "magenta", "darkslateblue" = "darkslateblue", "bisque4" = "yellow")) +
+  xlim(-1.5,1.5) +xlab("log2 acs/B73") +ylab("log2 B682/MP") +ylim(-1,1)
+
+#significant DEG
+acs_B73_protein <- read.csv("Protein_acs.csv")
+acs_B73_protein <- acs_B73_protein[,-(12:16)]
+acs_B73_protein$p_value <- ttestFun(acs_B73_protein, 1:5,6:10)
+acs_B73_protein$acs_avg <- rowMeans(acs_B73_protein[,6:10])
+acs_B73_protein$B73_avg <- rowMeans(acs_B73_protein[,1:5])
+acs_B73_protein$acs_B73 <- acs_B73_protein$acs_avg/acs_B73_protein$B73_avg
+acs_B73_protein$l2_acs_B73 <- log2(acs_B73_protein$acs_B73)
+acs_B73_protein <- acs_B73_protein[-grep("reverse",acs_B73_protein$Accession),]
+acs_B73_protein$Gene <- substr(acs_B73_protein$Accession, start = 1, stop = 14)
+acs_B73_protein <- merge.data.frame(acs_B73_protein, candidate_gene[,c(1:2,4:6)], by.x = "Gene", by.y = "Gene", all.x = T)
+acs_B73_protein <- acs_B73_protein[-which(duplicated(acs_B73_protein$Accession)),]
+plastid_encoded_ID <- plastid_encoded_protein[c(1,40)]
+plastid_encoded_ID <- merge.data.frame(plastid_encoded_ID, SL_GOIs[,c(1,4)], by.x = "Gene", by.y = "Gene", all.x = T)
+plastid_encoded_ID$expression <- "NEP-dependent"
+plastid_encoded_ID[plastid_encoded_ID$Category == "PhAPGs", "expression"] <- "PEP-dependent"
+acs_B73_protein <- merge.data.frame(acs_B73_protein,SL_GOIs[,c(1,4)], by.x = "Gene", by.y = "Gene", all.x = T)
+acs_B73_protein <- merge.data.frame(acs_B73_protein,plastid_encoded_ID[,c(1,4)], by.x = "Gene", by.y = "Gene", all.x = T)
+acs_B73_protein$l10_pval <- -log10(acs_B73_protein$p_value)
+acs_B73_selected <- acs_B73_protein[!is.na(acs_B73_protein$MF),]
+acs_B73_selected[acs_B73_selected$Type == "ER","Type"] <- "HSP"
+acs_B73_protein_DEG_up <- acs_B73_protein[which(acs_B73_protein$acs_B73 >1),]
+acs_B73_protein_DEG_up <- acs_B73_protein_DEG_up[which(acs_B73_protein_DEG_up$l10_pval > -log10(0.05)),]
+
+```
+
+
+#compare parents
+```{r}
+l2_parents_seedling_mature <- read.csv("~/Downloads/protein_L2_leaf.csv")
+l2_parents_seedling_mature$Gene <- substr(l2_parents_seedling_mature$Accession, start = 1, stop = 14)
+#l2_parent_candidate <- l2_parents[l2_parents$Gene %in% candidate_gene$Accession,]
+l2_parent <- l2_parent[-grep("reverse",l2_parent$Accession),]
+l2_parent <- merge.data.frame(l2_parent, acs[,c(1,4)], by.x = "Gene",by.y = "Gene")
+l2_parent_candidate <- merge.data.frame(l2_parent, candidate_gene[,c(1:2,4,7:8)], by.x = "Gene", by.y = "Gene")
+l2_parent_candidate <- l2_parent_candidate[-which(duplicated(l2_parent_candidate$l2_seedling_HMP)),]
+l2_parent_candidate <- l2_parent_candidate[-grep("only",l2_parent_candidate$Accession),]
+l2_parent_candidate$acs_B73 <- as.numeric(l2_parent_candidate$acs_B73)
+l2_parent_candidate$l2_seedling_HMP <- as.numeric(l2_parent_candidate$l2_seedling_HMP)
+l2_parent_candidate$l2_seedling_B73Mo17<- as.numeric(l2_parent_candidate$l2_seedling_B73Mo17)
+
+ggplot(l2_parents, aes(l2.HYB.MP.,l2.B73.Mo17., color = module)) +geom_point(size = 0.7) +xlim(-1,1) +ylim(-1,1)
+write.csv(l2_parent_candidate,"l2_parent_candidate.csv")
+```
+
+
+#correlation for all genotypes
+```{r}
+all_height <- read.csv("sld_all_height.csv",header = F, stringsAsFactors = F)
+colnames(all_height) <- c("genotype","height")
+Protein_all_genotype <- read.csv("Protein_all_genotype.csv", stringsAsFactors = F)
+Protein_all_genotype <- Protein_all_genotype[,c(6,12:13,23:26,36:39,40:69,79:82,92:153,159)]
+
+Protein_all_genotype$X6Hybrid_B73 <- rowMeans(Protein_all_genotype[,c("X6Hybrid.B73.r1","X6Hybrid.B73.r2", "X6Hybrid.B73.r3")])
+Protein_all_genotype$X6Hybrid_Mo17 <- rowMeans(Protein_all_genotype[,c("X6Hybrid.Mo17.r1","X6Hybrid.Mo17.r2", "X6Hybrid.Mo17.r3")])
+Protein_all_genotype$X6Hybrid_A682 <- rowMeans(Protein_all_genotype[,c("X6Hybrid.A682.r1","X6Hybrid.A682.r2", "X6Hybrid.A682.r3")])
+Protein_all_genotype$X6Hybrid_B84 <- rowMeans(Protein_all_genotype[,c("X6Hybrid.B84.r1","X6Hybrid.B84.r2", "X6Hybrid.B84.r3")])
+
+Protein_all_genotype$X6Hybrid_BM <- rowMeans(Protein_all_genotype[,c("X6Hybrid.B73xMo17.r1","X6Hybrid.B73xMo17.r2", "X6Hybrid.B73xMo17.r3")])
+Protein_all_genotype$X6Hybrid_MB <- rowMeans(Protein_all_genotype[,c("X6Hybrid.Mo17xB73.r1","X6Hybrid.Mo17xB73.r2", "X6Hybrid.Mo17xB73.r3")])
+
+Protein_all_genotype$X6Hybrid_B84xB73 <- rowMeans(Protein_all_genotype[,c("X6Hybrid.B84xB73.r1","X6Hybrid.B84xB73.r2", "X6Hybrid.B84xB73.r3")])
+Protein_all_genotype$X6Hybrid_B84xMo17 <- rowMeans(Protein_all_genotype[,c("X6Hybrid.B84xMo17.r1","X6Hybrid.B84xMo17.r2", "X6Hybrid.B84xMo17.r3")])
+Protein_all_genotype$X6Hybrid_A682xB73 <- rowMeans(Protein_all_genotype[,c("X6Hybrid.A682xB73.r1","X6Hybrid.A682xB73.r2", "X6Hybrid.A682xB73.r3")])
+Protein_all_genotype$X6Hybrid_A682xMo17 <- rowMeans(Protein_all_genotype[,c("X6Hybrid.A682xMo17.r1","X6Hybrid.A682xMo17.r2", "X6Hybrid.A682xMo17.r3")])
+
+Protein_all_genotype$RIL_B73 <- rowMeans(Protein_all_genotype[,c("B73.1","B73.3", "B73.4")])
+Protein_all_genotype$RIL_Mo17 <- rowMeans(Protein_all_genotype[,c("Mo17.1","Mo17.3", "Mo17.4")])
+Protein_all_genotype$RIL_BM <- rowMeans(Protein_all_genotype[,c("BM.1","BM.2" ,"BM.3", "BM.4")])
+Protein_all_genotype$RIL_14 <- rowMeans(Protein_all_genotype[,c("X14.1","X14.2", "X14.3", "X14.4")])
+Protein_all_genotype$RIL_B14 <- rowMeans(Protein_all_genotype[,c("X14B.1","X14B.2" ,"X14B.3", "X14B.4")])
+Protein_all_genotype$RIL_M14 <- rowMeans(Protein_all_genotype[,c("X14M.1","X14M.2" ,"X14M.3", "X14M.4")])
+Protein_all_genotype$RIL_16 <- rowMeans(Protein_all_genotype[,c("X16.1","X16.2", "X16.3", "X16.4")])
+Protein_all_genotype$RIL_B16 <- rowMeans(Protein_all_genotype[,c("X16B.1","X16B.2", "X16B.3", "X16B.4")])
+Protein_all_genotype$RIL_M16 <- rowMeans(Protein_all_genotype[,c("X16M.1","X16M.2" ,"X16M.3", "X16M.4")])
+Protein_all_genotype$RIL_21 <- rowMeans(Protein_all_genotype[,c("X21.1","X21.2" ,"X21.3", "X21.4")])
+Protein_all_genotype$RIL_B21 <- rowMeans(Protein_all_genotype[,c("X21B.1","X21B.2", "X21B.3", "X21B.4")])
+Protein_all_genotype$RIL_M21 <- rowMeans(Protein_all_genotype[,c("X21M.1","X21M.2" ,"X21M.3", "X21M.4")])
+Protein_all_genotype$RIL_317 <- rowMeans(Protein_all_genotype[,c("X317.1","X317.2", "X317.3", "X317.4")])
+Protein_all_genotype$RIL_B317 <- rowMeans(Protein_all_genotype[,c("X317B.1","X317B.2", "X317B.3", "X317B.4")])
+Protein_all_genotype$RIL_M317 <- rowMeans(Protein_all_genotype[,c("X317M.1","X317M.2", "X317M.3", "X317M.4")])
+Protein_all_genotype$Gene <- substr(Protein_all_genotype$Accession, start = 1, stop = 14)
+Protein_all_genotype_mean <- Protein_all_genotype[,109:134]
+
+Protein_6hybrid_2 <- Protein_all_genotype[,89:99]
+Protein_6hybrid_2$Gene <- substr(Protein_6hybrid_2$Accession, start = 1, stop = 14)
+UPR_ERAD <- read.csv("~/Desktop/Lab/Regulator story/test_candidate_gene/UPR_ER_protein_cor_all.csv", header = T)
+UPR_ERAD_ID <- UPR_ERAD$Gene
+
+Protein_UPR_ERAD <- Protein_all_genotype[Protein_all_genotype$Gene %in% UPR_ERAD$Gene,c(3,7,11,45,49,108:109)]
+
+Protein_UPR_ERAD <- Protein_UPR_ERAD[-grep("only", Protein_UPR_ERAD$Accession),]
+Protein_UPR_ERAD <- merge.data.frame(Protein_UPR_ERAD,HMP_expression_UPR, by.x = "Gene", by.y = "Gene", all = T)
+Protein_UPR_ERAD <- merge.data.frame(Protein_UPR_ERAD,UPR_ERAD[,c(1,3:8)], by.x = "Gene", by.y = "Gene", all.x = T)
+
+Protein_6hybrid_UPR_ERAD <- Protein_6hybrid_UPR_ERAD[-which(duplicated(Protein_6hybrid_UPR_ERAD$X6Hybrid_B73)),]
+Protein_6hybrid_UPR_ERAD <- 
+Protein_6hybrid_UPR_ERAD[-which(rowSums(Protein_6hybrid_UPR_ERAD[,2:11]) == 0),]
+UPR_ERAD_protein_cor <- Protein_6hybrid_UPR_ERAD[,c(1,2,5,3,4,6:11)]
+rownames(UPR_ERAD_protein_cor) <- UPR_ERAD_protein_cor[,1]
+UPR_ERAD_protein_cor <- UPR_ERAD_protein_cor[,-1]
+UPR_ERAD_protein_cor <- t(UPR_ERAD_protein_cor)
+UPR_ERAD_protein_cor_out <- data.frame(cor(UPR_ERAD_protein_cor,all_height[1:10,2]))
+colnames(UPR_ERAD_protein_cor_out)[1] <- "Cor_Protein_to_height_6hybrid"
+UPR_ERAD_protein_cor_out$Accession <- rownames(UPR_ERAD_protein_cor_out)
+
+Protein_RIL <- Protein_all_genotype[,c(89,100:114)]
+Protein_RIL$Gene <- substr(Protein_RIL$Accession, start = 1, stop = 14)
+
+Protein_RIL$BM_HMP <- Protein_RIL$RIL_BM/((Protein_RIL$RIL_B73+Protein_RIL$RIL_Mo17)/2)
+Protein_RIL$B14_HMP <- Protein_RIL$RIL_BM/((Protein_RIL$RIL_B73+Protein_RIL$RIL_14)/2)
+Protein_RIL$M14_HMP <- Protein_RIL$RIL_BM/((Protein_RIL$RIL_14+Protein_RIL$RIL_Mo17)/2)
+Protein_RIL$B16_HMP <- Protein_RIL$RIL_BM/((Protein_RIL$RIL_B73+Protein_RIL$RIL_16)/2)
+Protein_RIL$M16_HMP <- Protein_RIL$RIL_BM/((Protein_RIL$RIL_16+Protein_RIL$RIL_Mo17)/2)
+Protein_RIL$B21_HMP <- Protein_RIL$RIL_BM/((Protein_RIL$RIL_B73+Protein_RIL$RIL_21)/2)
+Protein_RIL$M21_HMP <- Protein_RIL$RIL_BM/((Protein_RIL$RIL_21+Protein_RIL$RIL_Mo17)/2)
+Protein_RIL$B317_HMP <- Protein_RIL$RIL_BM/((Protein_RIL$RIL_B73+Protein_RIL$RIL_317)/2)
+Protein_RIL$M317_HMP <- Protein_RIL$RIL_BM/((Protein_RIL$RIL_317+Protein_RIL$RIL_Mo17)/2)
+write.csv(Protein_UPR_ERAD, "UPR_ERAD_candidates.csv")
+Protein_RIL$Protein_mean_RIL_HMP <- rowMeans(Protein_RIL[,18:26])
+UPR_ER_protein_cor_all_out <- merge.data.frame(UPR_ER_protein_cor_all_out,Protein_RIL[,c("Accession","Protein_mean_RIL_HMP")], by.x = "Accession",by.y = "Accession", all.x = T)
+
+
+
+
+Protein_RIL_UPR_ERAD <- Protein_all_genotype[Protein_all_genotype$Gene %in% UPR_ERAD$Gene,c(108,119:133)]
+Protein_RIL_UPR_ERAD <- Protein_RIL_UPR_ERAD[-grep("only", Protein_RIL_UPR_ERAD$Accession),]
+Protein_RIL_UPR_ERAD <- Protein_RIL_UPR_ERAD[-which(duplicated(Protein_RIL_UPR_ERAD$RIL_B73)),]
+Protein_RIL_UPR_ERAD <- Protein_RIL_UPR_ERAD[-which(rowSums(Protein_RIL_UPR_ERAD[,11:13]) == 0),]
+RIL_UPR_ERAD_COR <- Protein_RIL_UPR_ERAD
+rownames(RIL_UPR_ERAD_COR) <- Protein_RIL_UPR_ERAD[,1]
+RIL_UPR_ERAD_COR <- RIL_UPR_ERAD_COR[,-1]
+RIL_UPR_ERAD_COR <- t(RIL_UPR_ERAD_COR)
+RIL_UPR_ERAD_COR_out <- data.frame(cor(RIL_UPR_ERAD_COR,all_height[11:25,2]))
+colnames(RIL_UPR_ERAD_COR_out) <- "Cor_Protein_to_height_RIL"
+RIL_UPR_ERAD_COR_out$Accession <- rownames(RIL_UPR_ERAD_COR_out)
+
+Protein_UPR_ER_all <- Protein_all_genotype[Protein_all_genotype$Gene %in% UPR_ERAD$Gene,]
+Protein_UPR_ER_all <- Protein_UPR_ER_all[-grep("only",Protein_UPR_ER_all$Accession),]
+Protein_UPR_ER_all <- Protein_UPR_ER_all[-which(duplicated(Protein_UPR_ER_all$X6Hybrid_B73)),]
+Protein_UPR_ER_all <- Protein_UPR_ER_all[-which(duplicated(Protein_UPR_ER_all$RIL_B73)),]
+Protein_UPR_ER_all <- Protein_UPR_ER_all[-which(rowSums(Protein_UPR_ER_all[,2:11]) == 0),]
+Protein_UPR_ER_all <- Protein_UPR_ER_all[-which(rowSums(Protein_UPR_ER_all[,15:17]) == 0),]
+Protein_UPR_ER_all <- Protein_UPR_ER_all[,c(1,2,5,3,4,6:26)]
+UPR_ER_protein_cor_all <- Protein_UPR_ER_all
+rownames(UPR_ER_protein_cor_all) <- UPR_ER_protein_cor_all[,1]
+UPR_ER_protein_cor_all <- UPR_ER_protein_cor_all[,-1]
+UPR_ER_protein_cor_all <- t(UPR_ER_protein_cor_all)
+
+UPR_ER_protein_cor_all_out <- data.frame(cor(UPR_ER_protein_cor_all, all_height[,2]))
+colnames(UPR_ER_protein_cor_all_out) <- "Cor_Protein_to_height_allsamples"
+UPR_ER_protein_cor_all_out$Accession <- rownames(UPR_ER_protein_cor_all_out)
+
+UPR_ER_protein_cor_all_out <- merge.data.frame(UPR_ER_protein_cor_all_out, RIL_UPR_ERAD_COR_out, by.x = "Accession", by.y = "Accession", all.x = T)
+#UPR_ER_protein_cor_all_out <- UPR_ER_protein_cor_all_out[-which(is.na(UPR_ER_protein_cor_all_out$Cor_Protein_to_height_RIL)),]
+UPR_ER_protein_cor_all_out <- merge.data.frame(UPR_ER_protein_cor_all_out, UPR_ERAD_protein_cor_out, by.x = "Accession", by.y = "Accession", all.y = T)
+UPR_ER_protein_cor_all_out$Gene <- substr(UPR_ER_protein_cor_all_out$Accession, start = 1, stop = 14)
+UPR_ER_protein_cor_all_out <- merge.data.frame(UPR_ER_protein_cor_all_out,UPR_ERAD,by.x = "Gene", by.y = "Gene", all.y = T)
+write.csv(UPR_ER_protein_cor_all_out,"UPR_ER_protein_cor_all.csv")
+
+HMP_expression <- read.csv("Protein_all_hybrid_HMP.csv", header = T)
+colnames(HMP_expression)[21] <- "ProteinHMPCorheightheterosis"
+HMP_expression_UPR <- HMP_expression[HMP_expression$Gene %in% UPR_ERAD$Gene,16:21]
+HMP_expression_UPR <- HMP_expression_UPR[-grep("only",HMP_expression_UPR$Accession),]
+
+UPR_ER_protein_cor_all_out <- merge.data.frame(UPR_ER_protein_cor_all_out,HMP_expression[,c(17:20)], by.x = "Gene", by.y = "Gene", all.x = T)
+
+#UPR_ER_protein_cor_all_out <- merge.data.frame(UPR_ER_protein_cor_all_out,Protein_all_genotype[,c("Accession","acsB73","Seedling_leaf_HMP","Mature_leaf_HMP","Day_HMP","Night_HMP")], by.x = "Accession", by.y = "Accession", all.x = T)
+
+UPR_ER_protein_cor_all_out <- merge.data.frame(UPR_ER_protein_cor_all_out,RNA_HMP[,c("Gene","geneTraitSignificance")], by.x = "Gene", by.y = "Gene", all.x = T)
+UPR_ER_protein_cor_all_out <- merge.data.frame(UPR_ER_protein_cor_all_out,protein_WGCNA[,c("ProbeID","geneTraitSignificance")], by.x = "Accession", by.y = "ProbeID", all.x = T)
+
+UPR_ER_protein_cor_all_out <- merge.data.frame(UPR_ER_protein_cor_all_out,Protein_UPR_ER_all[,c("Gene","acsB73","Seedling_leaf_HMP","Mature_leaf_HMP","Day_HMP","Night_HMP","Accession")], by.x = "Gene", by.y = "Gene", all.x = T)
+```
+
+
+
+#Compare B73,Mo17 and RILs
+```{r}
+Protein_RIL <- Protein_all_genotype[,c(50:55,60:63,72:75,84:87,96:99,108:109)]
+Protein_RIL <- Protein_RIL[-which(is.na(Protein_RIL$B73.1)),]
+Protein_RIL$mean_B73 <- rowMeans(Protein_RIL[,1:3])
+Protein_RIL$mean_Mo17 <- rowMeans(Protein_RIL[,4:6])
+Protein_RIL$mean_14 <- rowMeans(Protein_RIL[,7:10])
+Protein_RIL$mean_16 <- rowMeans(Protein_RIL[,11:14])
+Protein_RIL$mean_21 <- rowMeans(Protein_RIL[,15:18])
+Protein_RIL$mean_317 <- rowMeans(Protein_RIL[,19:22])
+Protein_RIL$B73_Mo17 <- Protein_RIL$mean_B73/Protein_RIL$mean_Mo17
+Protein_RIL$B73_14 <- Protein_RIL$mean_B73/Protein_RIL$mean_14
+Protein_RIL$B73_16 <- Protein_RIL$mean_B73/Protein_RIL$mean_16
+Protein_RIL$B73_21 <- Protein_RIL$mean_B73/Protein_RIL$mean_21
+Protein_RIL$B73_317 <- Protein_RIL$mean_B73/Protein_RIL$mean_317
+
+Protein_RIL$Mo17_14 <- Protein_RIL$mean_Mo17/Protein_RIL$mean_14
+Protein_RIL$Mo17_16 <- Protein_RIL$mean_Mo17/Protein_RIL$mean_16
+Protein_RIL$Mo17_21 <- Protein_RIL$mean_Mo17/Protein_RIL$mean_21
+Protein_RIL$Mo17_317 <- Protein_RIL$mean_Mo17/Protein_RIL$mean_317
+
+Protein_RIL$pval_B73_Mo17 <- ttestFun(Protein_RIL,1:3,4:6)
+Protein_RIL$pval_B73_14 <- ttestFun(Protein_RIL,1:3,7:10)
+Protein_RIL$pval_B73_16 <- ttestFun(Protein_RIL,1:3,11:14)
+Protein_RIL$pval_B73_21 <- ttestFun(Protein_RIL,1:3,15:18)
+Protein_RIL$pval_B73_317 <- ttestFun(Protein_RIL,1:3,19:22)
+
+Protein_RIL$pval_Mo17_14 <- ttestFun(Protein_RIL,4:6,7:10)
+Protein_RIL$pval_Mo17_16 <- ttestFun(Protein_RIL,4:6,11:14)
+Protein_RIL$pval_Mo17_21 <- ttestFun(Protein_RIL,4:6,15:18)
+Protein_RIL$pval_Mo17_317 <- ttestFun(Protein_RIL,4:6,19:22)
+
+Protein_RIL$diff_B14_BM <- abs(Protein_RIL$B73_14 -1)/abs(Protein_RIL$B73_Mo17-1)
+Protein_RIL$diff_B16_BM <- abs(Protein_RIL$B73_16 -1)/abs(Protein_RIL$B73_Mo17-1)
+Protein_RIL$diff_B21_BM <- abs(Protein_RIL$B73_21 -1)/abs(Protein_RIL$B73_Mo17-1)
+Protein_RIL$diff_B317_BM <- abs(Protein_RIL$B73_317 -1)/abs(Protein_RIL$B73_Mo17-1)
+
+Protein_RIL$diff_M14_BM <- abs(Protein_RIL$Mo17_14 -1)/abs(Protein_RIL$B73_Mo17-1)
+Protein_RIL$diff_M16_BM <- abs(Protein_RIL$Mo17_16 -1)/abs(Protein_RIL$B73_Mo17-1)
+Protein_RIL$diff_M21_BM <- abs(Protein_RIL$Mo17_21 -1)/abs(Protein_RIL$B73_Mo17-1)
+Protein_RIL$diff_M317_BM <- abs(Protein_RIL$Mo17_317 -1)/abs(Protein_RIL$B73_Mo17-1)
+
+
+
+Protein_RIL_selected <- Protein_RIL[which(abs(Protein_RIL$B73_Mo17-1)>0.15),23:56]
+Protein_RIL_selected <- Protein_RIL_selected[-grep("reverse",Protein_RIL_selected$Accession),]
+Protein_RIL_selected <- Protein_RIL_selected[which(Protein_RIL_selected$pval_B73_Mo17 < 0.05),]
+
+
+#14
+Protein_RIL_selected$B73_14 <- Protein_RIL_selected$mean_B73/Protein_RIL_selected$mean_14
+Protein_RIL_selected$Mo17_14 <- Protein_RIL_selected$mean_Mo17/Protein_RIL_selected$mean_14
+Protein_RIL_selected$assign_14 <- "Other"
+Protein_RIL_selected$keeportoss_14 <- "Other"
+
+for (i in 1:nrow(Protein_RIL_selected)){
+  if (Protein_RIL_selected[i,"diff_B317_BM"] < Protein_RIL_selected[i,"diff_M317_BM"]){
+    Protein_RIL_selected[i,"assign_317"] <- "B73"
+  }else if (Protein_RIL_selected[i,"diff_B317_BM"] > Protein_RIL_selected[i,"diff_M317_BM"]){
+    Protein_RIL_selected[i,"assign_317"] <- "Mo17"
+  }
+}
+
+for (i in 1:nrow(Protein_RIL_selected)){
+  if (pmin(Protein_RIL_selected[i, "diff_B317_BM"], Protein_RIL_selected[i, "diff_M317_BM"]) < 0.3){
+    Protein_RIL_selected[i,"keeportoss_317"] <- "keep"
+  }
+}
+
+#16
+Protein_RIL_selected$B73_16 <- Protein_RIL_selected$mean_B73/Protein_RIL_selected$mean_16
+Protein_RIL_selected$Mo17_16 <- Protein_RIL_selected$mean_Mo17/Protein_RIL_selected$mean_16
+Protein_RIL_selected$assign_16 <- "Other"
+Protein_RIL_selected$keeportoss_16 <- "Other"
+
+for (i in 1:nrow(Protein_RIL_selected)){
+  if (abs(Protein_RIL_selected[i,"B73_16"]-1) < 0.25){
+    Protein_RIL_selected[i,"assign_16"] <- "B73"
+  }else if (abs(Protein_RIL_selected[i,"Mo17_16"]-1) < 0.25){
+    Protein_RIL_selected[i,"assign_16"] <- "Mo17"
+  }
+}
+
+#21
+Protein_RIL_selected$B73_21 <- Protein_RIL_selected$mean_B73/Protein_RIL_selected$mean_21
+Protein_RIL_selected$Mo17_21 <- Protein_RIL_selected$mean_Mo17/Protein_RIL_selected$mean_21
+Protein_RIL_selected$assign_21 <- "Other"
+Protein_RIL_selected$keeportoss_21 <- "Other"
+
+for (i in 1:nrow(Protein_RIL_selected)){
+  if (abs(Protein_RIL_selected[i,"B73_21"]-1) < 0.25){
+    Protein_RIL_selected[i,"assign_21"] <- "B73"
+  }else if (abs(Protein_RIL_selected[i,"Mo17_21"]-1) < 0.25){
+    Protein_RIL_selected[i,"assign_21"] <- "Mo17"
+  }
+}
+
+#317
+Protein_RIL_selected$B73_317 <- Protein_RIL_selected$mean_B73/Protein_RIL_selected$mean_317
+Protein_RIL_selected$Mo17_317 <- Protein_RIL_selected$mean_Mo17/Protein_RIL_selected$mean_317
+Protein_RIL_selected$assign_317 <- "Other"
+Protein_RIL_selected$keeportoss_317 <- "Other"
+
+for (i in 1:nrow(Protein_RIL_selected)){
+  if (abs(Protein_RIL_selected[i,"B73_317"]-1) < 0.25){
+    Protein_RIL_selected[i,"assign_317"] <- "B73"
+  }else if (abs(Protein_RIL_selected[i,"Mo17_317"]-1) < 0.25){
+    Protein_RIL_selected[i,"assign_317"] <- "Mo17"
+  }
+}
+
+#Protein_RIL_assign_parents <- Protein_RIL_selected[,c(1:11,13:14,16:17,19:20,12,15,18,21)]
+not_diff_B73 <- Protein_RIL_selected[,19:22] > 0.05
+Protein_RIL_B73_like <- Protein_RIL_selected[which(rowSums(not_diff_B73) ==4),]
+diff_Mo17 <- Protein_RIL_B73_like[,23:26] < 0.05
+Protein_RIL_B73_keep <- Protein_RIL_B73_like[which(rowSums(diff_Mo17) ==4),]
+not_diff_Mo17 <- Protein_RIL_selected[,23:26] > 0.05
+Protein_RIL_Mo17_like <- Protein_RIL_selected[which(rowSums(not_diff_Mo17) ==4),]
+diff_B73 <- Protein_RIL_Mo17_like[,19:22] < 0.05
+Protein_RIL_Mo17_keep <- Protein_RIL_Mo17_like[which(rowSums(diff_B73) ==4),]
+Protein_RIL_assign_parents_final <- rbind(Protein_RIL_B73_keep,Protein_RIL_Mo17_keep)
+Protein_RIL_assign_parents_final <- merge.data.frame(Protein_RIL_assign_parents_final, protein_annot[,2:3], by.x = "Gene", by.y = "Gene", all.x = T)
+Protein_RIL_assign_parents_final <- Protein_RIL_assign_parents_final[-which(duplicated(Protein_RIL_assign_parents_final$Accession)),]
+write.csv(Protein_RIL_assign_parents_final,"Protein_RIL_differentially_expressed_2.xlsx")
+Protein_RIL_assign_parents_final$ttest_B73Mo17 <- 
+```
+
+
+#phospho data
+```{r}
+leaf_phospho <- read.csv("~/Desktop/Lab/Regulator story/test_candidate_gene/leaf_phospho.csv")
+Sdl_phospho <- df_epost[,c(2:18,35)]
+blade_phospho <- df_epost[,19:35]
+Sdl_phospho$ttest_B73Mo17 <- ttestFun(Sdl_phospho,2:4,5:7)
+Sdl_phospho$ttest_HMP
+```
+
+#convert GI accessions
+```{r eval = FALSE, echo = False}
+require(reutils)
+require(readr)
+require(XML)
+
+#get GI accessions
+giAccessions<-leaf_phospho$Accession
+#remove gi accessions with alphas AKA nonconvertible
+giAccessions<-giAccessions[-grep(giAccessions, pattern = "[a-zA-Z]")]
+
+#if re-running this, delete old copy of efetch.txt from file first
+#first, convert GI to UID
+#because more than 500, need to use epost first
+p <- epost(giAccessions, db = "protein")
+#efetch genpept file format for each UID, save to text file (requirement for epost>500)
+efetch(p, db="protein",retmode = "text", rettype="gp", outfile = "efetch.txt")
+
+#read in UID text
+UIDVec<-read.delim(file="efetch.txt", header = FALSE)
+#convert to vector
+UIDVec<-UIDVec[,1]
+#get gene IDs from full flat file
+UIDVec2<-UIDVec[grep(UIDVec, pattern="GeneID")]
+#gsub out "GeneID:" to get accession number
+UIDVec2<-gsub(UIDVec2, pattern=".*:", replacement = "")
+#check that there is a UID for each GI
+length(UIDVec2)==length(giAccessions)
+
+#since >500, need to use epost
+#loop across total number of batches of 200
+#post to epost, fetch each XML, create conversion table
+#get number of batches
+batches<-seq(1:ceiling(length(UIDVec2)/500))
+batchEnd<-0
+#create empty df
+NCBIConvert<-NULL
+#loop across batches
+for(i in 1:length(batches)){
+  batchStart<-batchEnd+1
+  if(i<length(batches)){batchEnd<-batchEnd+500}else(batchEnd<-length(UIDVec2))
+  print(batchEnd)
+  f<-epost(UIDVec2[batchStart:batchEnd], db="gene")
+  allXML2<-content(efetch(f, db="gene", retmode="xml"), as="xml")
+  #pull out gene reference locus tag, if exists, if not, return "NA"
+  dbxrefs1<-as.list(xpathApply(allXML2,"//Gene-ref", function(x) {
+             if("Gene-ref_locus-tag" %in% names(x)){xmlValue(x[["Gene-ref_locus-tag"]])}
+             else {NA}
+              }))
+  #gsub out "ZEAMMB73_"
+  dbxrefs1<-gsub(dbxrefs1, pattern = "ZEAMMB73_", replacement = "")
+  #turn into character vector
+  dbxrefs1<-unlist(dbxrefs1)
+
+    
+  #now get UIDs back (to check for length of XML)
+  dbxrefs2<-as.list(xpathApply(allXML2,"//Entrezgene_track-info/Gene-track",function(x) {
+             if("Gene-track_geneid" %in% names(x)){xmlValue(x[["Gene-track_geneid"]])}
+             else {NA}
+              }))
+  #turn into character vector
+  dbxrefs2<-unlist(dbxrefs2)
+  
+  #check that original gi length == number of XML entries efetched
+  500==length(dbxrefs2)
+  #check that number of Zm accessions matches number of gi accessions
+  500==length(dbxrefs1)
+
+  #put together
+  tmp<-cbind(giAccessions[batchStart:batchEnd], dbxrefs2, dbxrefs1)
+  NCBIConvert<-rbind(NCBIConvert, tmp)
+}
+#rename columns
+colnames(NCBIConvert)<-c("GI", "UID", "maizegdb.epost")
+
+NCBIConvert2 <- as.data.frame(NCBIConvert)
+
+#remove missing maizegdbid columns
+NCBIConvert2 <- NCBIConvert2[!(NCBIConvert2$maizegdb.epost=="NA"),]
+#Print stats
+print(paste0("Input numeric GIs with a corresponding numeric UID = ",length((NCBIConvert2$GI))))
+print(paste0("Unique MaizeGDB IDs returned = ",length(unique(NCBIConvert2$maizegdb.epost))))
+
+df_epost <- merge.data.frame(leaf_phospho, NCBIConvert2[,c(1,3)], by.x = "Accession", by.y = "GI", all=T)
+```
+
+#Peng heat stress comparison
+```{r}
+stress_Peng <- read.csv("07.cpm.hy.csv")
+stress_cold <- stress_Peng[,c(1,grep("Control",colnames(stress_Peng)),grep("Cold",colnames(stress_Peng)))]
+stress_heat <- stress_Peng[,c(1,grep("Control",colnames(stress_Peng)),grep("Heat",colnames(stress_Peng)))]
+```
+
+#cold stress
+```{r}
+#control averages
+stress_cold$B73_0h_control_avg <- rowMeans(stress_cold[,c("B73_0h_Control_Rep1","B73_0h_Control_Rep2","B73_0h_Control_Rep3")])
+stress_cold$B73_1h_control_avg <- rowMeans(stress_cold[,c("B73_1h_Control_Rep1","B73_1h_Control_Rep2","B73_1h_Control_Rep3")])
+stress_cold$B73_25h_control_avg <- rowMeans(stress_cold[,c("B73_25h_Control_Rep1","B73_25h_Control_Rep2","B73_25h_Control_Rep3")])
+
+stress_cold$BM_0h_control_avg <- rowMeans(stress_cold[,c("B73xMo17_0h_Control_Rep1","B73xMo17_0h_Control_Rep2","B73xMo17_0h_Control_Rep3")])
+stress_cold$BM_1h_control_avg <- rowMeans(stress_cold[,c("B73xMo17_1h_Control_Rep1","B73xMo17_1h_Control_Rep2","B73xMo17_1h_Control_Rep3")])
+stress_cold$BM_25h_control_avg <- rowMeans(stress_cold[,c("B73xMo17_25h_Control_Rep1","B73xMo17_25h_Control_Rep2","B73xMo17_25h_Control_Rep3")])
+
+stress_cold$Mo17_0h_control_avg <- rowMeans(stress_cold[,c("Mo17_0h_Control_Rep1","Mo17_0h_Control_Rep2","Mo17_0h_Control_Rep3")])
+stress_cold$Mo17_1h_control_avg <- rowMeans(stress_cold[,c("Mo17_1h_Control_Rep1","Mo17_1h_Control_Rep2","Mo17_1h_Control_Rep3")])
+stress_cold$Mo17_25h_control_avg <- rowMeans(stress_cold[,c("Mo17_25h_Control_Rep1","Mo17_25h_Control_Rep2","Mo17_25h_Control_Rep3")])
+
+stress_cold$W22_0h_control_avg <- rowMeans(stress_cold[,c("W22_0h_Control_Rep1","W22_0h_Control_Rep2","W22_0h_Control_Rep3")])
+stress_cold$W22_1h_control_avg <- rowMeans(stress_cold[,c("W22_1h_Control_Rep1","W22_1h_Control_Rep2","W22_1h_Control_Rep3")])
+stress_cold$W22_25h_control_avg <- rowMeans(stress_cold[,c("W22_25h_Control_Rep1","W22_25h_Control_Rep2","W22_25h_Control_Rep3")])
+
+stress_cold$W22xB73_0h_control_avg <- rowMeans(stress_cold[,c("W22xB73_0h_Control_Rep1","W22xB73_0h_Control_Rep2","W22xB73_0h_Control_Rep3")])
+stress_cold$W22xB73_1h_control_avg <- rowMeans(stress_cold[,c("W22xB73_1h_Control_Rep1","W22xB73_1h_Control_Rep2","W22xB73_1h_Control_Rep3")])
+stress_cold$W22xB73_25h_control_avg <- rowMeans(stress_cold[,c("W22xB73_25h_Control_Rep1","W22xB73_25h_Control_Rep2","W22xB73_25h_Control_Rep3")])
+
+stress_cold$W22xMo17_0h_control_avg <- rowMeans(stress_cold[,c("W22xMo17_0h_Control_Rep1","W22xMo17_0h_Control_Rep2","W22xMo17_0h_Control_Rep3")])
+stress_cold$W22xMo17_1h_control_avg <- rowMeans(stress_cold[,c("W22xMo17_1h_Control_Rep1","W22xMo17_1h_Control_Rep2","W22xMo17_1h_Control_Rep3")])
+stress_cold$W22xMo17_25h_control_avg <- rowMeans(stress_cold[,c("W22xMo17_25h_Control_Rep1","W22xMo17_25h_Control_Rep2","W22xMo17_25h_Control_Rep3")])
+
+#HMP for controls
+
+##BM
+stress_cold$BM_0h_control_HMP <- stress_cold$BM_0h_control_avg/rowMeans(stress_cold[,c("B73_0h_control_avg","Mo17_0h_control_avg")])
+stress_cold$BM_1h_control_HMP <- stress_cold$BM_1h_control_avg/rowMeans(stress_cold[,c("B73_1h_control_avg","Mo17_1h_control_avg")])
+stress_cold$BM_25h_control_HMP <- stress_cold$BM_25h_control_avg/rowMeans(stress_cold[,c("B73_25h_control_avg","Mo17_25h_control_avg")])
+
+stress_cold$l2_BM_0h_control_HMP <- log2(stress_cold$BM_0h_control_HMP)
+stress_cold$l2_BM_1h_control_HMP <- log2(stress_cold$BM_1h_control_HMP)
+stress_cold$l2_BM_25h_control_HMP <- log2(stress_cold$BM_25h_control_HMP)
+
+##B22
+stress_cold$B22_0h_control_HMP <- stress_cold$W22xB73_0h_control_avg/rowMeans(stress_cold[,c("B73_0h_control_avg","W22_0h_control_avg")])
+stress_cold$B22_1h_control_HMP <- stress_cold$W22xB73_1h_control_avg/rowMeans(stress_cold[,c("B73_1h_control_avg","W22_1h_control_avg")])
+stress_cold$B22_25h_control_HMP <- stress_cold$W22xB73_25h_control_avg/rowMeans(stress_cold[,c("B73_25h_control_avg","W22_25h_control_avg")])
+stress_cold$l2_B22_0h_control_HMP <- log2(stress_cold$B22_0h_control_HMP)
+stress_cold$l2_B22_1h_control_HMP <- log2(stress_cold$B22_1h_control_HMP)
+stress_cold$l2_B22_25h_control_HMP <- log2(stress_cold$B22_25h_control_HMP)
+
+##M22
+stress_cold$M22_0h_control_HMP <- stress_cold$W22xMo17_0h_control_avg/rowMeans(stress_cold[,c("Mo17_0h_control_avg","W22_0h_control_avg")])
+stress_cold$M22_1h_control_HMP <- stress_cold$W22xMo17_1h_control_avg/rowMeans(stress_cold[,c("Mo17_1h_control_avg","W22_1h_control_avg")])
+stress_cold$M22_25h_control_HMP <- stress_cold$W22xMo17_25h_control_avg/rowMeans(stress_cold[,c("Mo17_25h_control_avg","W22_25h_control_avg")])
+stress_cold$l2_M22_0h_control_HMP <- log2(stress_cold$M22_0h_control_HMP)
+stress_cold$l2_M22_1h_control_HMP <- log2(stress_cold$M22_1h_control_HMP)
+stress_cold$l2_M22_25h_control_HMP <- log2(stress_cold$M22_25h_control_HMP)
+
+#stress averages
+##1hr
+stress_cold$B73_1h_Cold_avg <- rowMeans(stress_cold[,c("B73_1h_Cold_Rep1","B73_1h_Cold_Rep2","B73_1h_Cold_Rep3")])
+stress_cold$BM_1h_Cold_avg <- rowMeans(stress_cold[,c("B73xMo17_1h_Cold_Rep1","B73xMo17_1h_Cold_Rep2","B73xMo17_1h_Cold_Rep3")])
+stress_cold$Mo17_1h_Cold_avg <- rowMeans(stress_cold[,c("Mo17_1h_Cold_Rep1","Mo17_1h_Cold_Rep2","Mo17_1h_Cold_Rep3")])
+stress_cold$W22_1h_Cold_avg <- rowMeans(stress_cold[,c("W22_1h_Cold_Rep1","W22_1h_Cold_Rep2","W22_1h_Cold_Rep3")])
+stress_cold$B22_1h_Cold_avg <- rowMeans(stress_cold[,c("W22xB73_1h_Cold_Rep1","W22xB73_1h_Cold_Rep2","W22xB73_1h_Cold_Rep3")])
+stress_cold$M22_1h_Cold_avg <- rowMeans(stress_cold[,c("W22xMo17_1h_Cold_Rep1","W22xMo17_1h_Cold_Rep2","W22xMo17_1h_Cold_Rep3")])
+
+##fold change
+stress_cold$B73_1h_Cold_l2fc <- log2(stress_cold$B73_1h_Cold_avg/stress_cold$B73_1h_control_avg)
+stress_cold$BM_1h_Cold_l2fc <- log2(stress_cold$BM_1h_Cold_avg/stress_cold$BM_1h_control_avg)
+stress_cold$Mo17_1h_Cold_l2fc <- log2(stress_cold$Mo17_1h_Cold_avg/stress_cold$Mo17_1h_control_avg)
+stress_cold$W22_1h_Cold_l2fc <- log2(stress_cold$W22_1h_Cold_avg/stress_cold$W22_1h_control_avg)
+stress_cold$B22_1h_Cold_l2fc <- log2(stress_cold$B22_1h_Cold_avg/stress_cold$W22xB73_1h_control_avg)
+stress_cold$M22_1h_Cold_l2fc <- log2(stress_cold$M22_1h_Cold_avg/stress_cold$W22xMo17_1h_control_avg)
+
+##HMP
+stress_cold$BM_1h_Cold_HMP <- stress_cold$BM_1h_Cold_avg/rowMeans(stress_cold[,c("B73_1h_Cold_avg","Mo17_1h_Cold_avg")])
+
+stress_cold$B22_1h_Cold_HMP <- stress_cold$B22_1h_Cold_avg/rowMeans(stress_cold[,c("B73_1h_Cold_avg","W22_1h_Cold_avg")])
+
+stress_cold$M22_1h_Cold_HMP <- stress_cold$M22_1h_Cold_avg/rowMeans(stress_cold[,c("W22_1h_Cold_avg","Mo17_1h_Cold_avg")])
+
+stress_cold$l2_BM_1h_Cold_HMP <- log2(stress_cold$BM_1h_Cold_HMP)
+stress_cold$l2_B22_1h_Cold_HMP <- log2(stress_cold$B22_1h_Cold_HMP)
+stress_cold$l2_M22_1h_Cold_HMP <- log2(stress_cold$M22_1h_Cold_HMP)
+
+##25hr
+stress_cold$B73_25h_Cold_avg <- rowMeans(stress_cold[,c("B73_25h_Cold_Rep1","B73_25h_Cold_Rep2","B73_25h_Cold_Rep3","B73_25h_Cold_Rep4")])
+stress_cold$BM_25h_Cold_avg <- rowMeans(stress_cold[,c("B73xMo17_25h_Cold_Rep1","B73xMo17_25h_Cold_Rep2","B73xMo17_25h_Cold_Rep3")])
+stress_cold$Mo17_25h_Cold_avg <- rowMeans(stress_cold[,c("Mo17_25h_Cold_Rep1","Mo17_25h_Cold_Rep2","Mo17_25h_Cold_Rep3")])
+stress_cold$W22_25h_Cold_avg <- rowMeans(stress_cold[,c("W22_25h_Cold_Rep1","W22_25h_Cold_Rep2","W22_25h_Cold_Rep3")])
+stress_cold$B22_25h_Cold_avg <- rowMeans(stress_cold[,c("W22xB73_25h_Cold_Rep1","W22xB73_25h_Cold_Rep2","W22xB73_25h_Cold_Rep3")])
+stress_cold$M22_25h_Cold_avg <- rowMeans(stress_cold[,c("W22xMo17_25h_Cold_Rep1","W22xMo17_25h_Cold_Rep2","W22xMo17_25h_Cold_Rep3")])
+
+##fold change
+stress_cold$B73_25h_Cold_l2fc <- log2(stress_cold$B73_25h_Cold_avg/stress_cold$B73_25h_control_avg)
+stress_cold$BM_25h_Cold_l2fc <- log2(stress_cold$BM_25h_Cold_avg/stress_cold$BM_25h_control_avg)
+stress_cold$Mo17_25h_Cold_l2fc <- log2(stress_cold$Mo17_25h_Cold_avg/stress_cold$Mo17_25h_control_avg)
+stress_cold$W22_25h_Cold_l2fc <- log2(stress_cold$W22_25h_Cold_avg/stress_cold$W22_25h_control_avg)
+stress_cold$B22_25h_Cold_l2fc <- log2(stress_cold$B22_25h_Cold_avg/stress_cold$W22xB73_25h_control_avg)
+stress_cold$M22_25h_Cold_l2fc <- log2(stress_cold$M22_25h_Cold_avg/stress_cold$W22xMo17_25h_control_avg)
+
+##HMP
+stress_cold$BM_25h_Cold_HMP <- stress_cold$BM_25h_Cold_avg/rowMeans(stress_cold[,c("B73_25h_Cold_avg","Mo17_25h_Cold_avg")])
+
+stress_cold$B22_25h_Cold_HMP <- stress_cold$B22_25h_Cold_avg/rowMeans(stress_cold[,c("B73_25h_Cold_avg","W22_25h_Cold_avg")])                                                 
+
+stress_cold$M22_25h_Cold_HMP <- stress_cold$M22_25h_Cold_avg/rowMeans(stress_cold[,c("W22_25h_Cold_avg","Mo17_25h_Cold_avg")])
+
+stress_cold$l2_BM_25h_Cold_HMP <- log2(stress_cold$BM_25h_Cold_HMP)
+stress_cold$l2_B22_25h_Cold_HMP <- log2(stress_cold$B22_25h_Cold_HMP)
+stress_cold$l2_M22_25h_Cold_HMP <- log2(stress_cold$M22_25h_Cold_HMP)
+
+stress_cold[stress_cold == 0] <- NA
+stress_cold <- na.omit(stress_cold)
+write.csv(stress_cold,"Peng_stress_cold.csv",row.names = F)
+```
+#Cold stress figures
+```{r}
+l2fc_cold <- stress_cold[,c(1,grep("l2fc",colnames(stress_cold)))]
+l2fc_GOIs <- merge.data.frame(l2fc_cold,SL_GOIs_select[,c("Gene","Protein","Category")], by.x = "gid", by.y = "Gene")
+l2fc_GOIs <- merge.data.frame(l2fc_cold,SL_GOIs_select[,c("Gene","Protein","Category")], by.x = "gid", by.y = "Gene")
+l2fc_GOIs <- l2fc_GOIs[-which(duplicated(l2fc_GOIs$B73_1h_Cold_l2fc)),]
+table(l2fc_GOIs$Category)
+l2fc_PhANG_in <- l2fc_GOIs[l2fc_GOIs$Category == "PhANGs",1:13]
+rownames(l2fc_PhANG_in) <- l2fc_PhANG_in$gid
+l2fc_PhANG_in <- l2fc_PhANG_in[,-1]
+l2fc_PhANG_in<- as.matrix(l2fc_PhANG_in)
+colnames(l2fc_PhANG_in) <- str_replace(colnames(l2fc_PhANG_in), "_Cold_l2fc","")
+par(mar = c(3,4,5,1))
+colnames(stress_control_candidate_ER)[2:19] <- str_replace(colnames(stress_control_candidate_ER)[2:19],"_Control_avg","")
+colnames(stress_control_candidate_ER)[2:19] <- str_replace(colnames(stress_control_candidate_ER)[2:19],"_control_avg","")
+colors = seq(-1,1,length = 101)
+my_palette <- colorRampPalette(c("yellow","white","darkblue"))(n = 100)
+heatmap.2(as.matrix(ER_ERQC_select[,17:22]),trace = "none", density.info = "none", cexRow = 0.5, cexCol = 0.9,  key.xlab = "l2fc 25h cold/WT", dendrogram = "both", labRow = ER_ERQC_select$Symbol, margins = c(7,7), main = "1h cold/WT p<= 0.05 hybrids", labCol = gsub("_1h_Cold_l2fc","", colnames(ER_ERQC_select)[17:22]), offsetRow = -0.5, col= my_palette)
+ 
+ 
+ ggsave(plot = , "heatmap_coldstress_1.pdf",
+          dpi=300, width=3.4252, height=8)  
+ 
+ 
+ 
+ ##compare controls
+ stress_control_change <- stress_cold[,c(1,94:129)]
+ stress_control_change_normalize <- stress_control_change
+ stress_control_change_normalize[,2:4] <- stress_control_change[,2:4]/stress_control_change[,2]
+ stress_control_change_normalize[,5:7] <- stress_control_change[,5:7]/stress_control_change[,5]
+ stress_control_change_normalize[,8:10] <- stress_control_change[,8:10]/stress_control_change[,8]
+ stress_control_change_normalize[,11:13] <- stress_control_change[,11:13]/stress_control_change[,11]
+ stress_control_change_normalize[,14:16] <- stress_control_change[,14:16]/stress_control_change[,14]
+ stress_control_change_normalize[,17:19] <- stress_control_change[,17:19]/stress_control_change[,17]
+stress_control_GOIs <- merge.data.frame(stress_control_change_normalize[,1:19], SL_GOIs_select[,c("Protein","Gene","Category")], by.x = "gid", by.y = "Gene")
+stress_control_candidate <- merge.data.frame(stress_control_change_normalize[,1:19], candidate_gene[,c("Gene","Pathway.Category","Symbol")], by.x = "gid", by.y = "Gene")
+stress_control_candidate <- stress_control_candidate[-which(duplicated(stress_control_candidate$B73_1h_control_avg)),]
+stress_control_candidate$Color <- "Green"
+stress_control_candidate[stress_control_candidate$Pathway.Category == "Chloroplast protein homeostasis","Color"] <- "blue"
+stress_control_candidate[stress_control_candidate$Pathway.Category == "ER UPR","Color"] <- "yellow"
+stress_control_candidate[stress_control_candidate$Pathway.Category == "ERAD/ERQC","Color"] <- "red"
+stress_control_candidate[stress_control_candidate$Pathway.Category == "Retrograde signaling","Color"] <- "magenta"
+stress_control_candidate[stress_control_candidate$Pathway.Category == "Tetrapyrrole Metabolism","Color"] <- "Purple"
+stress_control_candidate[stress_control_candidate$Pathway.Category == "TOR Signaling","Color"] <- "black"
+stress_control_candidate_ER <- stress_control_candidate[stress_control_candidate$Pathway.Category == "ER UPR",]
+stress_control_GOIs$Color <- "Green"
+stress_control_GOIs[stress_control_GOIs$Category == "NE plastid ribosome","Color"] <- "Blue"
+stress_control_GOIs[stress_control_GOIs$Category == "Ethylene Biosynthesis","Color"] <- "Red"
+  
+
+stress_control_candidate$Pathway.Category == "ERAD/ERQC"
+```
+
+#Cold stress correlations
+```{r}
+stress_control <- stress_cold[,c(1,grep("Control_Rep",colnames(stress_cold)))]
+stress_control_cor <- t(stress_control)
+colnames(stress_control_cor) <- stress_control_cor[1,]
+stress_control_cor <- stress_control_cor[-1,]
+stress_control_bzip <- stress_control[stress_control$gid == "Zm00001d046718",]
+stress_control_bzip <- data.frame(stress_control_bzip[,-1])
+stress_control_bzip <- t(stress_control_bzip)
+stress_control_bzip_cor_hybrid_all <- data.frame(t(cor(stress_control_bzip[c(10:18,37:54),],stress_control_cor[c(10:18,37:54),],use = "p")))
+colnames(stress_control_bzip_cor_hybrid_all)[1] <- "Cor"
+stress_control_bzip_cor_hybrid_all$pvalue <- corPvalueStudent(stress_control_bzip_cor_hybrid_all$Cor, nSamples = 27)
+stress_control_bzip_cor <- stress_control_bzip_cor[which(stress_control_bzip_cor$pvalue <= 0.05),]
+stress_control_bzip_cor_hybrid_all$Gene <- rownames(stress_control_bzip_cor_hybrid_all)
+stress_control_bzip_cor <- merge.data.frame(stress_control_bzip_cor, datOutput[,c("Gene","Protein")], by.x = "Gene", by.y = "Gene", all.x = T)
+stress_control_bzip_cor <- merge.data.frame(stress_control_bzip_cor, candidate_gene[,c("Gene","Pathway.Category","Symbol")], by.x = "Gene", by.y = "Gene", all.x = T)
+stress_control_bzip_cor <- merge.data.frame(stress_control_bzip_cor, complex_v4[,c("Gene","complex_label")], by.x = "Gene", by.y = "Gene", all.x = T)
+stress_control_bzip_cor <- merge.data.frame(stress_control_bzip_cor, SL_GOIs[,c("Gene","Category")], by.x = "Gene", by.y = "Gene", all.x = T)
+stress_control_bzip_cor <- stress_control_bzip_cor[-which(duplicated(stress_control_bzip_cor$Cor)),]
+stress_control_bzip_cop_hybrid <- stress_control_bzip_cor
+write.csv(stress_cold_bzip_cor,"stress_cold_bzip_cor_all.csv", row.names = F)
+stress_control_bzip_density <- stress_control_bzip_cor_inbred[,1:2]
+stress_control_bzip_density$Genotype <- "Inbred"
+stress_control_bzip_density_hybrid <- stress_control_bzip_cor_hybrid[,1:2]
+stress_control_bzip_density_hybrid$Genotype <- "Hybrid"
+stress_control_bzip_density_all <- rbind(stress_control_bzip_density,stress_control_bzip_density_hybrid)
+#compare parent hybrid
+stress_control_bzip_cor_inbred_high <- stress_control_bzip_cor_inbred[which(abs(stress_control_bzip_cor_inbred$Cor) >= 0.7),]
+stress_control_bzip_cor_hybrid_high <- stress_control_bzip_cor_hybrid[which(abs(stress_control_bzip_cor_hybrid$Cor) >= 0.7),]
+intersect_ID <- intersect(stress_control_bzip_cor_hybrid_high$Gene,stress_control_bzip_cor_inbred_high$Gene)
+intersect_cor <- stress_control_bzip_cor_inbred[stress_control_bzip_cor_inbred$Gene %in% intersect_ID,]
+intersect_cor$Cor_hybrid <- stress_control_bzip_cor_hybrid[match(intersect_cor$Gene,stress_control_bzip_cor_hybrid$Gene),"Cor"]
+intersect_cor$pvalue_hybrid <- stress_control_bzip_cor_hybrid[match(intersect_cor$Gene,stress_control_bzip_cor_hybrid$Gene),"pvalue"]
+intersect_cor <- intersect_cor[,c(1:4,9:10)]
+colnames(intersect_cor)[2:3] <- c("Cor_inbred","pvalue_inbred")
+
+stress_control_bzip_cor_hybrid[stress_control_bzip_cor_hybrid$Gene %in% intersect_ID,2:3])
+stress_control_bzip_cor_hybrid[stress_control_bzip_cor_hybrid$Gene %in% intersect_ID,2:3]
+stress_control_bzip_cor_inbred <- merge.data.frame(stress_control_bzip_cor_inbred, candidate_gene[,c("Gene","MF","Type")], by.x = "Gene", by.y = "Gene", all.x = T)
+stress_control_bzip_cor_inbred <- stress_control_bzip_cor_inbred[-which(duplicated(stress_control_bzip_cor_inbred$Cor)),]
+#lineplot
+stress_cold_bzip_plot <- stress_cold_bzip
+stress_cold_bzip_plot$sample <- rownames(stress_cold_bzip_plot)
+colnames(stress_cold_bzip_plot)[1] <- "Expression"
+#stress_cold_bzip_plot <- as.data.frame(stress_cold_bzip_plot[-1,])
+stress_cold_bzip_plot[1:92,2:4] <- str_split_fixed(rownames(stress_cold_bzip_plot),"_",3)
+#stress_cold_bzip_plot <- stress_cold_bzip_plot[,-(4:5)]
+colnames(stress_cold_bzip_plot)[2:4] <- c("Genotype","Timepoint","Sample")
+stress_cold_bzip_plot$Timepoint <- gsub("h","",stress_cold_bzip_plot$Timepoint)
+stress_cold_bzip_plot <- stress_cold_bzip_plot[order(stress_cold_bzip_plot$Timepoint),]
+stress_cold_bzip_plot$normalize <- ""
+stress_cold_bzip_plot$Type<- "Hybrid"
+stress_cold_bzip_plot[stress_cold_bzip_plot$Genotype %in% inbred_list,"Type"] <- "Inbred"
+stress_cold_bzip_plot[1:3,"normalize"] <- stress_cold_bzip_plot[1:3,"Expression"]/stress_cold_bzip_plot[1,"Expression"] 
+stress_cold_bzip_plot[4:6,"normalize"] <- stress_cold_bzip_plot[4:6,"Expression"]/stress_cold_bzip_plot[4,"Expression"] 
+stress_cold_bzip_plot[7:9,"normalize"] <- stress_cold_bzip_plot[7:9,"Expression"]/stress_cold_bzip_plot[7,"Expression"] 
+stress_cold_bzip_plot[10:12,"normalize"] <- stress_cold_bzip_plot[10:12,"Expression"]/stress_cold_bzip_plot[10,"Expression"] 
+stress_cold_bzip_plot[13:15,"normalize"] <- stress_cold_bzip_plot[13:15,"Expression"]/stress_cold_bzip_plot[13,"Expression"] 
+stress_cold_bzip_plot[16:18,"normalize"] <- stress_cold_bzip_plot[16:18,"Expression"]/stress_cold_bzip_plot[16,"Expression"] 
+stress_cold_bzip_plot$Timepoint_2 <- gsub("h","",stress_cold_bzip_plot$Timepoint)
+stress_cold_bzip_plot$genotype <- "Inbred"
+stress_cold_bzip_plot[c(4:6,13:18),"genotype"] <- "Hybrid"
+stress_cold_bzip_plot$Expression_numeric <- as.numeric(stress_cold_bzip_plot$Expression)
+
+ggplot(stress_cold_bzip_plot[19:92,], aes(Timepoint, Expression_numeric, color = Genotype)) + geom_boxplot() +ylab("Bzip60 expression") 
+##cold bzip plot
+stress_cold_treat <- stress_cold[,c(1,grep("Cold_avg",colnames(stress_cold)), grep("control_avg", colnames(stress_cold)))]
+stress_cold_treat_bzip <- stress_cold_treat[stress_cold_treat$gid == "Zm00001d046718",]
+rownames(stress_cold_treat_bzip) <- stress_cold_treat_bzip$gid
+stress_cold_treat_bzip <- stress_cold_treat_bzip[,-1]
+stress_cold_treat_bzip <- data.frame(t(stress_cold_treat_bzip))
+stress_cold_treat_bzip[1:30,2:4] <- str_split_fixed(rownames(stress_cold_treat_bzip),"_",3)
+colnames(stress_cold_treat_bzip) <- c("Expression","Genotype","Timepoint","Treatment")
+stress_cold_treat_bzip$Timepoint <- gsub("h","",stress_cold_treat_bzip$Timepoint)
+stress_cold_treat_bzip <- stress_cold_treat_bzip[order(stress_cold_treat_bzip$Timepoint),]
+stress_cold_bzip_plot[,7:8] <- str_split_fixed(stress_cold_bzip_plot$Sample, "_",2)
+stress_cold_treat_bzip <- rbind(stress_cold_treat_bzip,stress_cold_bzip_plot$Expression)
+stress_cold_treat_bzip$normalize <- ""
+stress_cold_treat_bzip[1:6,"normalize"] <- stress_cold_treat_bzip[1:6,1]/stress_cold_treat_bzip[13:18,1]
+stress_cold_treat_bzip[7:12,"normalize"] <- stress_cold_treat_bzip[7:12,1]/stress_cold_treat_bzip[13:18,1]
+stress_cold_treat_bzip[13:18,"normalize"] <- stress_cold_treat_bzip[13:18,1]/stress_cold_treat_bzip[13:18,1]
+
+#cold correlations
+stress_cold_cor <- stress_cold[,c(1,grep("Cold_Rep",colnames(stress_cold)))]
+stress_cold_bzip_cor <- stress_cold_cor[stress_cold_cor$gid == "Zm00001d046718",]
+stress_cold_cor_in <- t(stress_cold_cor)
+colnames(stress_cold_cor_in) <- stress_cold_cor_in[1,]
+stress_cold_cor_in <- stress_cold_cor_in[-1,]
+stress_cold_bzip_cor <- t(stress_cold_bzip_cor)
+stress_cold_bzip_cor <- stress_cold_bzip_cor[,-1]
+stress_cold_bzip_cor_inbred <- as.data.frame(t(cor(stress_cold_bzip_cor[c(1:7,14:26),],stress_cold_cor_in[c(1:7,14:26),],use = "p")))
+colnames(stress_cold_bzip_cor_inbred)[1] <- "Cor"
+stress_cold_bzip_cor_inbred$pvalue <- corPvalueStudent(stress_cold_bzip_cor_inbred$Cor, nSamples = 20)
+stress_cold_bzip_cor_inbred <- stress_cold_bzip_cor_inbred[which(stress_cold_bzip_cor_inbred$pvalue <= 0.05),]
+stress_cold_bzip_cor_inbred$Gene <- rownames(stress_cold_bzip_cor_inbred)
+stress_cold_bzip_cor_inbred <- merge.data.frame(stress_cold_bzip_cor_inbred, datOutput[,c("Gene","Protein")], by.x = "Gene", by.y = "Gene", all.x = T)
+stress_cold_bzip_cor_inbred <- merge.data.frame(stress_cold_bzip_cor_inbred, candidate_gene[,c("Gene","Pathway.Category","Symbol")], by.x = "Gene", by.y = "Gene", all.x = T)
+stress_cold_bzip_cor_inbred <- merge.data.frame(stress_cold_bzip_cor_inbred, complex_v4[,c("Gene","complex_label")], by.x = "Gene", by.y = "Gene", all.x = T)
+stress_cold_bzip_cor_inbred <- merge.data.frame(stress_cold_bzip_cor_inbred, SL_GOIs[,c("Gene","Category")], by.x = "Gene", by.y = "Gene", all.x = T)
+stress_cold_bzip_cor_inbred <- stress_cold_bzip_cor_inbred[-which(duplicated(stress_cold_bzip_cor_inbred$Cor)),]
+length(intersect(stress_cold_bzip_cor_inbred[which(abs(stress_cold_bzip_cor_inbred$Cor)>0.8),"Gene"],stress_control_bzip_cor_inbred[which(abs(stress_control_bzip_cor_inbred$Cor)>0.8),"Gene"]))
+stress_cold_bzip_cor_inbred_high <- stress_cold_bzip_cor_inbred[which(abs(stress_cold_bzip_cor_inbred$Cor)>0.9),]
+
+stress_cold_bzip_cor_hybrid_25h <- as.data.frame(t(cor(stress_cold_bzip_cor[c(11:13,30:32,36:38),],stress_cold_cor_in[c(11:13,30:32,36:38),],use = "p")))
+colnames(stress_cold_bzip_cor_hybrid_25h)[1] <- "Cor"
+stress_cold_bzip_cor_hybrid_25h$pvalue <- corPvalueStudent(stress_cold_bzip_cor_hybrid_25h$Cor, nSamples = 9)
+stress_cold_bzip_cor_hybrid_25h <- stress_cold_bzip_cor_hybrid_25h[which(stress_cold_bzip_cor_hybrid_25h$pvalue <= 0.05),]
+stress_cold_bzip_cor_hybrid_25h$Gene <- rownames(stress_cold_bzip_cor_hybrid_25h)
+stress_cold_bzip_cor_hybrid_25h <- merge.data.frame(stress_cold_bzip_cor_hybrid_25h, datOutput[,c("Gene","Protein")], by.x = "Gene", by.y = "Gene", all.x = T)
+stress_cold_bzip_cor_hybrid_25h <- merge.data.frame(stress_cold_bzip_cor_hybrid_25h, candidate_gene[,c("Gene","Pathway.Category","Symbol","MF","Type")], by.x = "Gene", by.y = "Gene", all.x = T)
+stress_cold_bzip_cor_hybrid_25h <- merge.data.frame(stress_cold_bzip_cor_hybrid_25h, complex_v4[,c("Gene","complex_label")], by.x = "Gene", by.y = "Gene", all.x = T)
+stress_cold_bzip_cor_hybrid_25h <- merge.data.frame(stress_cold_bzip_cor_hybrid_25h, SL_GOIs[,c("Gene","Category")], by.x = "Gene", by.y = "Gene", all.x = T)
+stress_cold_bzip_cor_hybrid_25h <- stress_cold_bzip_cor_hybrid_25h[-which(duplicated(stress_cold_bzip_cor_hybrid_25h$Cor)),]
+
+cop1_hy5 <- 
+rbind(stress_control_bzip_cor_inbred_high[stress_control_bzip_cor_inbred_high$Gene == "Zm00001d052138",1:3],
+stress_control_bzip_cor_inbred_high[stress_control_bzip_cor_inbred_high$Gene == "Zm00001d039658",1:3],
+stress_control_bzip_cor_hybrid_all[stress_control_bzip_cor_hybrid_all$Gene == "Zm00001d052138",1:3],
+stress_control_bzip_cor_hybrid_all[stress_control_bzip_cor_hybrid_all$Gene == "Zm00001d039658",1:3],
+stress_cold_bzip_cor_hybrid[stress_cold_bzip_cor_hybrid$Gene == "Zm00001d052138"|stress_cold_bzip_cor_hybrid$Gene == "Zm00001d018207",1:3],stress_cold_bzip_cor_hybrid[stress_cold_bzip_cor_hybrid$Gene == "Zm00001d039658"|stress_cold_bzip_cor_hybrid$Gene == "Zm00001d015743",1:3],stress_cold_bzip_cor_inbred[stress_cold_bzip_cor_inbred$Gene == "Zm00001d052138"|stress_cold_bzip_cor_inbred$Gene == "Zm00001d018207",1:3],stress_cold_bzip_cor_inbred[stress_cold_bzip_cor_inbred$Gene == "Zm00001d039658"|stress_cold_bzip_cor_inbred$Gene == "Zm00001d015743",1:3])
+cop1_hy5$Treatment <- c("Control","Control","Control","Control", "Cold stress 1h&25h","Cold stress 1h&25h","Cold stress 1h&25h","Cold stress 1h&25h","Cold stress 1h&25h","Cold stress 1h&25h")
+cop1_hy5$Genotype <- c("Inbred","Inbred","Hybrid",  "Hybrid","Hybrid","Hybrid","Hybrid","Hybrid","Inbred","Inbred")
+cop1_hy5$Protein <- c("COP1","HY5","COP1","HY5","COP1","COP1","HY5","HY5","COP1","COP1")
+```
+
+#cold stress fold change
+```{r}
+stress_cold_l2fc <- stress_cold[,c(1,grep("1h",colnames(stress_cold)),grep("25h",colnames(stress_cold)))]
+stress_cold_l2fc$B73_1h_Cold_l2fc_pvalue <- ttestFun(stress_cold_l2fc, 2:4,20:22)
+stress_cold_l2fc$BM_1h_Cold_l2fc_pvalue <- ttestFun(stress_cold_l2fc, 5:7,23:25)
+stress_cold_l2fc$Mo17_1h_Cold_l2fc_pvalue <- ttestFun(stress_cold_l2fc, 8:10,26:28)
+stress_cold_l2fc$W22_1h_Cold_l2fc_pvalue <- ttestFun(stress_cold_l2fc, 11:13,29:31)
+stress_cold_l2fc$B22_1h_Cold_l2fc_pvalue <- ttestFun(stress_cold_l2fc, 14:16,32:34)
+stress_cold_l2fc$M22_1h_Cold_l2fc_pvalue <- ttestFun(stress_cold_l2fc, 17:19,35:37)
+
+stress_cold_l2fc$B73_25h_Cold_l2fc_pvalue <- ttestFun(stress_cold_l2fc, 62:64,80:83)
+stress_cold_l2fc$BM_25h_Cold_l2fc_pvalue <- ttestFun(stress_cold_l2fc, 65:67,84:86)
+stress_cold_l2fc$Mo17_25h_Cold_l2fc_pvalue <- ttestFun(stress_cold_l2fc, 68:70,87:89)
+stress_cold_l2fc$W22_25h_Cold_l2fc_pvalue <- ttestFun(stress_cold_l2fc, 71:73,90:93)
+stress_cold_l2fc$B22_25h_Cold_l2fc_pvalue <- ttestFun(stress_cold_l2fc, 74:76,94:96)
+stress_cold_l2fc$M22_25h_Cold_l2fc_pvalue <- ttestFun(stress_cold_l2fc, 77:79,97:99)
+
+colnames(stress_cold_l2fc)[1] <- "Gene"
+stress_cold_l2fc <- merge.data.frame(stress_cold_l2fc, SL_GOIs[,c("Gene","Category")], by.x = "Gene", by.y = "Gene", all.x = T)
+stress_cold_l2fc <- merge.data.frame(stress_cold_l2fc, candidate_gene[,c(1:2,4:6)], by.x = "Gene", by.y = "Gene", all.x = T)
+stress_cold_l2fc <- merge.data.frame(stress_cold_l2fc, complex_v4[,3:4], by.x = "Gene", by.y = "Gene", all.x = T)
+
+stress_cold_l2fc <- stress_cold_l2fc[-which(duplicated(stress_cold_l2fc$Gene)),]
+ER_ERQC <- stress_cold_l2fc[-which(stress_cold_l2fc$Pathway.Category == "Other"), c(1,38:61,100:141)]
+pvalue_1h <- ER_ERQC[,50:55] <= 0.05
+ER_ERQC_select <- ER_ERQC[which(rowSums(pvalue_1h) == 6),]
+pvalue_1h <- ER_ERQC[,c(50,52:53)] > 0.05
+pvalue_1h_2 <- ER_ERQC[,c(51,54:55)] <= 0.05
+ER_ERQC_select_1 <- ER_ERQC[which(rowSums(pvalue_1h) == 3),]
+ER_ERQC_select_2 <- ER_ERQC[which(rowSums(pvalue_1h_2) == 3),]
+ER_ERQC_select_ID <-intersect(ER_ERQC_select_1$Gene,ER_ERQC_select_2$Gene)
+ER_ERQC_select <- ER_ERQC[ER_ERQC$Gene %in% ER_ERQC_select_ID,]
+ER_ERQC_1 <- ER_ERQC_select[ER_ERQC_select$Pathway.Category == "ER UPR"|ER_ERQC_select$Pathway.Category == "ERAD/ERQC"|ER_ERQC_select$Pathway.Category == "Chloroplast protein homeostasis",]
+ER_ERQC_2 <- ER_ERQC_select[-which(ER_ERQC_select$Gene %in% ER_ERQC_1$Gene),]
+
+GOIs <- stress_cold_l2fc[stress_cold_l2fc$Category == "Ethylene Biosynthesis"|stress_cold_l2fc$Category == "NE plastid ribosome"|stress_cold_l2fc$Category == "PhANGs",c(1,38:61,100:141)]
+GOIs$Protein <- SL_GOIs[match(GOIs$Gene,SL_GOIs$Gene),"Protein"]
+pvalue_1h <- GOIs[,c(56,58:59)] > 0.05
+pvalue_1h_2 <- GOIs[,c(57,60:61)] <= 0.05
+GOIs_select_1 <- GOIs[which(rowSums(pvalue_1h) == 3),]
+GOIs_select_2 <- GOIs[which(rowSums(pvalue_1h_2) == 3),]
+GOIs_select_ID <- intersect(GOIs_select_1$Gene, GOIs_select_2$Gene)
+GOIs_select <- GOIs[GOIs$Gene %in% GOIs_select_ID,]
+pvalue_1h <- GOIs[,56:61] <= 0.05       
+GOIs_select <- GOIs[which(rowSums(pvalue_1h) == 6),]
+
+complex <- stress_cold_l2fc[-which(is.na(stress_cold_l2fc$complex_label)),c(1,38:61,100:141)]
+pvalue_1h <- complex[,50:55] <= 0.05
+complex_select <- complex[which(rowSums(pvalue_1h) == 6),]
+pvalue_1h <- complex[,c(50,52:53)] > 0.05
+pvalue_1h_2 <- complex[,c(51,54:55)] <= 0.05
+complex_select_1 <- complex[which(rowSums(pvalue_1h) == 3),]
+complex_select_2 <- complex[which(rowSums(pvalue_1h_2) == 3),]
+complex_select_ID <- intersect(complex_select_1$Gene, complex_select_2$Gene)
+complex_select <- complex[complex$Gene %in% complex_select_ID,]
+
+ER_ERQC_1[,c(41:46,63)]
+```
+
+#Peng heat stress
+```{r}
+heat_stress <- read.csv("~/Desktop/Peng_nonstress.csv")
+heat_stress_0h <- heat_stress[,1:19]
+heat_stress_0h$pvalue <- ttestFun(heat_stress_0h,c(2:4,8:13),c(5:7,14:19))
+heat_stress_0h_sig <- heat_stress_0h[which(heat_stress_0h$pvalue <= 0.1),]
+
+heat_stress_1h <- heat_stress[,c(1,26:43)]
+heat_stress_1h$pvalue <- ttestFun(heat_stress_0h,c(2:4,8:13),c(5:7,14:19))
+heat_stress_0h_sig <- heat_stress_0h[which(heat_stress_0h$pvalue <= 0.1),]
+
+
+
+
+
+
+stress_0h_UPR_sig <- heat_stress_sig[heat_stress_sig$gid %in% bzip_UPR_canonical_merge$Gene, ]
+stress_0h_UPR_sig$symbol <- bzip_UPR_canonical_merge[match(stress_0h_UPR_sig$gid,bzip_UPR_canonical_merge$Gene),"Symbol"]
+stress_0h_UPR_sig <- stress_0h_UPR_sig[-which(rowSums(stress_0h_UPR_sig[,20:25]) < 6),]
+stress_0h_UPR_sig_select <- stress_0h_UPR_sig[-which(is.na(stress_0h_UPR_sig$symbol)),]
+
+stress_0h_UPR <- stress_0h_UPR_sig_select[,1:19]
+stress_0h_UPR[,20:37] <- stress_0h_UPR[,2:19]/stress_0h_UPR$B73_0h_Control_Rep1
+stress_0h_UPR_whisker <- cbind(row = stress_0h_UPR[1:8,"gid"],stack(stress_0h_UPR[,20:37]))
+
+
+stress_0h_UPR_whisker$genotype <- "Inbred"
+stress_0h_UPR_whisker[c(25:48,97:144),"genotype"] <- "Hybrid"
+stress_0h_UPR_whisker$symbol <- bzip_UPR_canonical_merge[match(stress_0h_UPR_whisker$row,bzip_UPR_canonical_merge$Gene),"Symbol"]
+stress_0h_UPR_whisker <- stress_0h_UPR_whisker[-which(stress_0h_UPR_whisker$symbol == "-"),]
+
+
+stress_0h_ERAD <- heat_stress_0h_sig[heat_stress_0h_sig$gid %in% ERAD$Gene,]
+stress_0h_ERAD$Symbol <- ERAD[match(stress_0h_ERAD$gid,ERAD$Gene),"Symbol"]
+stress_0h_ERAD <- stress_0h_ERAD[-grep("PUX",stress_0h_ERAD$Symbol),]
+stress_0h_ERAD[,28:45] <- stress_0h_ERAD[,2:19]/stress_0h_ERAD$B73_0h_Control_Rep1
+stress_0h_ERAD_whisker <- cbind(row = stress_0h_ERAD[1:7,"gid"],stack(stress_0h_ERAD[,28:45]))
+stress_0h_ERAD_whisker$genotype <- "Inbred"
+stress_0h_ERAD_whisker[c(22:42,85:126),"genotype"] <- "Hybrid"
+stress_0h_ERAD_whisker$symbol <- ERAD[match(stress_0h_ERAD_whisker$row,ERAD$Gene),"Symbol"]
+
+stress_0h_UPRERAD_whisker <- rbind(stress_0h_UPR_whisker,stress_0h_ERAD_whisker)
+```
+
+#bzip602 mutant DEG
+```{r}
+bzip60mutant_DEG <- read.csv("~/Desktop/bzip602_W22_DEG.csv")
+bzip60mutant_DEG <- bzip60mutant_DEG[which(bzip60mutant_DEG$Pvalue_31_20DAG <= 0.05),]
+bzip60mutant_DEG <- bzip60mutant_DEG[which(bzip60mutant_DEG$Pvalue_31_27DAG <= 0.05),]
+colnames(bzip60mutant_DEG)[1] <- "Gene"
+bzip60mutant_DEG <- merge.data.frame(bzip60mutant_DEG,SL_GOIs[,c("Gene","Category")], by.x = "Gene", by.y = "Gene", all.x = T)
+bzip60mutant_DEG <- bzip60mutant_DEG[-which(duplicated(bzip60mutant_DEG$Gene)),]
+bzip60mutant_DEG[which(bzip60mutant_DEG$Pathway.Category == "Chloroplast biogenesis and development"),]
+bzip60mutant_DEG <- merge.data.frame(bzip60mutant_DEG,candidate_gene[,c("Gene","Pathway.Category","Symbol")], by.x = "Gene", by.y = "Gene", all.x = T)
+bzip60mutant_DEG <- merge.data.frame(bzip60mutant_DEG, complex_v4[,c("complex_label","v4_gene_model")], by.x = "Gene","v4_gene_model", all.x = T)
+bzip60mutant_DEG <- merge.data.frame()
+bzip60mutant_DEG[which(is.na(bzip60mutant_DEG$Pathway.Category)),"Pathway.Category"] <- bzip60mutant_DEG[which(is.na(bzip60mutant_DEG$Pathway.Category)),"Category"] 
+bzip60mutant_DEG_select <- bzip60mutant_DEG[-which(bzip60mutant_DEG$Pathway.Category == "Other"),]
+
+bzip60mutant_DEG[bzip60mutant_DEG$Pathway.Category == "Chloroplast protein homeostasis",c(1:2,5,9:11)]
+```
+
+
+
+
+#correlation to plant height all genotypes
+```{r}
+height_6H <- read.csv("~/Downloads/6HPlantHeights.csv", header = T, stringsAsFactors = F)
+height_6H_t <- t(height_6H)
+colnames(height_6H_t) <- height_6H_t[1,]
+height_6H_t <- as.matrix(height_6H_t[-1,])
+cpm_6H_cor <- cpm.6H[,c(1,32:41)]
+rownames(cpm_6H_cor) <- cpm_6H_cor[,1]
+cpm_6H_cor <- t(cpm_6H_cor)
+cpm_6H_cor <- cpm_6H_cor[,-1]
+cpm_6H_cor[,1:ncol(cpm_6H_cor)] <- as.numeric(cpm_6H_cor[,1:ncol(cpm_6H_cor)])
+cpm_6H_cor_height <- data.frame(cor(cpm_6H_cor,as.numeric(height_6H_t[,1]), use = "p"))
+cpm_6H_cor_height$Gene <- rownames(cpm_6H_cor_height)
+colnames(cpm_6H_cor_height)[1] <- "Cor"
+cpm_6H_cor_height <- merge.data.frame(cpm_6H_cor_height, RNA_annot[,c("Gene","Protein")], by.x = "Gene",by.y = "Gene", all.x = T)
+cpm_6H_cor_height <- merge.data.frame(cpm_6H_cor_height, datOutput[,c("Gene","G.S_height")], by.x = "Gene",by.y = "Gene", all.x = T)
+cpm_6H_cor_height <- merge.data.frame(cpm_6H_cor_height, cpm.6H[,c("Gene","pvalue")], by.x = "Gene",by.y = "Gene", all.x = T)
+cpm_6H_cor_height <- cpm_6H_cor_height[which(cpm_6H_cor_height$pvalue <= 0.05),]
+
+Protein_6H <- Protein_all_genotype[,c(40:69,159,166)]
+colnames(Protein_6H)[32] <- "Protein"
+Protein_6H$Gene <- substr(Protein_6H$Accession, start = 1, stop = 14)
+Protein_6H$pvalue <- ttestFun(Protein_6H, c(1:4,11:14,21:24),c(5:10,15:20,25:30))
+Protein_6H$B73 <- rowMeans(Protein_6H[,c(1,11,21)],na.rm = T)
+Protein_6H$B84 <- rowMeans(Protein_6H[,c(2,12,22)],na.rm = T)
+Protein_6H$Mo17 <- rowMeans(Protein_6H[,c(3,13,23)],na.rm = T)
+Protein_6H$A682 <- rowMeans(Protein_6H[,c(4,14,24)],na.rm = T)
+Protein_6H$B73xMo17 <- rowMeans(Protein_6H[,c(5,15,25)],na.rm = T)
+Protein_6H$Mo17xB73 <- rowMeans(Protein_6H[,c(6,16,26)],na.rm = T)
+Protein_6H$B84xB73 <- rowMeans(Protein_6H[,c(7,17,27)],na.rm = T)
+Protein_6H$B84xMo17 <- rowMeans(Protein_6H[,c(8,18,28)],na.rm = T)
+Protein_6H$A682xB73 <- rowMeans(Protein_6H[,c(9,19,29)],na.rm = T)
+Protein_6H$A682xMo17 <- rowMeans(Protein_6H[,c(10,20,30)],na.rm = T)
+Protein_6H <- Protein_6H[-grep("reverse",Protein_6H$Accession),]
+Protein_6H_cor <- Protein_6H[,c(31,35:44)]
+rownames(Protein_6H_cor) <- Protein_6H_cor$Accession
+Protein_6H_cor <- Protein_6H_cor[,-1]
+Protein_6H_cor <- t(Protein_6H_cor)
+Protein_6H_cor_height <- data.frame(cor(Protein_6H_cor, as.numeric(height_6H_t[,1]),use = "p"))
+colnames(Protein_6H_cor_height)[1] <- "Cor"
+Protein_6H_cor_height$Accession <- rownames(Protein_6H_cor_height)
+Protein_6H_cor_height <- merge.data.frame(Protein_6H_cor_height,Protein_6H[,31:34], by.x = "Accession", by.y = "Accession")
+Protein_6H_cor_height <- merge.data.frame(Protein_6H_cor_height, complex_v4[,c("Gene","complex_label")], by.x = "Gene", by.y = "Gene", all.x = T)
+
+Protein_6H <- merge.data.frame(Protein_6H, candidate_gene[,c("Gene","Symbol","Pathway.Category","MF","Type")], by.x = "Gene", by.y = "Gene", all.x = T)
+Protein_6H <- merge.data.frame(Protein_6H, complex_v4[,c("Gene","complex_label")], by.x = "Gene", by.y = "Gene", all.x = T)
+Protein_6H <- Protein_6H[-which(duplicated(Protein_6H$Accession)),]
+Protein_6H_2 <- Protein_6H[,c(1,33,35:49)]
+Protein_6H_2[is.na(Protein_6H_2$complex_label),"complex_label"] <- "Other"
+CLP_heatmap <- Protein_6H_2[Protein_6H_2$Type == "CLPC",c(1,4:14)]
+CLP_heatmap_matrix <- as.matrix(CLP_heatmap[,2:11])
+cytosolic <- Protein_6H_2[Protein_6H_2$complex_label %in% cytosolic_complex,c(2:12,17)]
+cytosolic <- cytosolic[-which(rowSums(cytosolic[,2:11]) == 0),]
+cytosolic_matrix <- as.matrix(cytosolic[,2:11])
+rownames(cytosolic_matrix) <- cytosolic$complex_label
+rownames(CLP_heatmap_matrix) <- CLP_heatmap$Symbol
+heatmap.2(as.matrix(CLP_heatmap[,c(2,3,4,5,6,7,8,9,10,11)]),dendrogram = "none", trace = "none",density.info = "none", scale = "row", cexCol = 0.8, cexRow = 0.7, offsetRow = 0, offsetCol = 0,margins = c(4,8), labRow = CLP_heatmap$Symbol)
+CLP_heatmap$Symbol_organized <- as.factor(CLP_heatmap$Symbol)
+
+cytosolic_complex <- c("HSP70","HSP70/90","CCT","prefoldin","CPN10-CPN20","Chaperonin 60")
+proteasome_complex <- c("Proteasome","NEDD8-activating enzyme E1","20S proteasome","19S proteasome")
+```
+
+
+#find candidates for forward genetics
+```{r}
+B682_sld_BM <- read.csv("B682_sdl_BM.csv")
+B682_sld_BM <- B682_sld_BM[-grep("DIV",B682_sld_BM$B73_A682),]
+
+B682_sld_BM <- merge.data.frame(B682_sld_BM, Protein_all_genotype[,c("Accession","Protein")], by.x = "Accession", by.y = "Accession", all.x = T)
+B682_sld_BM$Protein <- sub(".*description:","",B682_sld_BM$Protein.y)
+B682_sld_BM$Gene <- substr(B682_sld_BM$Accession, start = 1, stop = 14)
+B682_sld_BM <- B682_sld_BM[,-(21:22)]
+B682_sld_BM_candidate <- B682_sld_BM[,c(1,5:6,19:22)]
+B682_sld_BM_candidate[grep("proteasome",B682_sld_BM_candidate$Protein),]
+```
+
+
+#sdl leaf KEGG proteasome
+```{r}
+sdl_KEGG <- B682_sld_BM[,c("Accession","B73_Mo17","BM_HMP","B73_A682","B682_HMP")]
+sdl_KEGG$Gene <- substr(sdl_KEGG$Accession, start = 1, stop = 14)
+sdl_KEGG <- sdl_KEGG[-grep("reverse",sdl_KEGG$Accession),]
+sdl_KEGG[which(duplicated(sdl_KEGG$Gene)),]
+sdl_KEGG <- merge.data.frame(sdl_KEGG,v4_annot[c("v4_transcript","Entrez")], by.x = "Accession",by.y = "v4_transcript", all.x = T)
+sdl_KEGG <- sdl_KEGG[-which(sdl_KEGG$Entrez == ""),]
+sdl_KEGG <- sdl_KEGG[-which(is.na(sdl_KEGG$Entrez)),]
+sdl_KEGG[,5] <- as.numeric(sdl_KEGG[,5])
+sdl_KEGG$l2fc_B682 <- log2(sdl_KEGG$B682_HMP)
+proteasome <- complex_v4[grep("proteasome",complex_v4$complex_label),c("Gene","complex_label")]
+proteasome <- merge.data.frame(proteasome, v4_annot[,c("v4_gene_model","Entrez")], by.x = "Gene", by.y = "v4_gene_model", all.x = T)
+
+sdl_KEGG_in <- sdl_KEGG[,c(6,7)]
+sdl_KEGG_in <- sdl_KEGG_in[-which(duplicated(sdl_KEGG_in$Entrez)),]
+Entrez_KEGG <- sdl_KEGG_in$Entrez
+sdl_KEGG_in <- data.frame(sdl_KEGG_in[,-1])
+rownames(sdl_KEGG_in) <- Entrez_KEGG
+colnames(sdl_KEGG_in)[1] <- "l2fc"
+sdl_KEGG_in$l2fc <- as.numeric(sdl_KEGG_in$l2fc)
+pv.out <- pathview(gene.data = sdl_KEGG_in, pathway.id="zma04141", species = "zma", out.suffix = "Proteasome_sdl_B73Mo17_protein")
+sdl_KEGG_in[which(rownames(sdl_KEGG_in) %in% proteasome$Entrez),]
+B682_sld_BM[B682_sld_BM$Gene %in% proteasome$Gene, c(5:6,19:21)]
+
+```
+

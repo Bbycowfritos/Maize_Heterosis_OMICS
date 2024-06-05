@@ -1,0 +1,111 @@
+---
+title: "pQTL"
+author: "Bridget Bai"
+date: "6/25/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#qqman package
+```{r}
+pqtl <- read.csv("~/Desktop/rotation_Briggs/FINAL_NLB_pQTL.csv", header = TRUE, stringsAsFactors = FALSE)
+#manhatthan plot
+qtl_manhatthan <- dplyr::select(pqtl,c("marker.name","chr","lod","v4.bp","description","gene"))
+table(qtl_manhatthan$chr)
+colnames(qtl_manhatthan) <- c("SNP","CHR","P","BP","description","gene")
+cis_pqtl <- pqtl[pqtl$loc == "cis",]
+trans_pqtl <- pqtl[pqtl$loc == "trans",]
+manhattan(qtl_manhatthan,logp = FALSE,ylim = c(0,40),cex = 0.5,col = c("blue4", "orange3"),suggestiveline = F,genomewideline = F)#chr = qtl_manhatthan$chr,bp = qtl_manhatthan$v4.bp,p = qtl_manhatthan$lod)
+max(qtl_manhatthan$P)
+manhattan(subset(qtl_manhatthan,CHR == 1),logp = F)
+all_snp <- qtl_manhatthan[qtl_manhatthan$P >20,]
+trans_snp <- qtl_manhatthan[qtl_manhatthan$P >20,]
+SL_GOI[SL_GOI$Gene %in% trans_snp,]
+table(all_snp$SNP)
+manhattan(subset(qtl_manhatthan, CHR==5),logp = F)
+
+
+merge_qtl <- merge.data.frame(pqtl,SL_GOI[,c("Gene","Protein","Category","KeggPathway","GOterm")],by.x = "gene",by.y = "Gene", all = F)
+merge_qtl <- merge_qtl %>% distinct(ci_lo,.keep_all = T)
+
+merge_qtl[merge_qtl$gene %in% trans_snp, ]
+merge_qtl <- merge_qtl %>% distinct(pos,.keep_all = T)
+```
+
+#plot specific grouops 
+```{r}
+oxphos_gg <- oxphos %>% 
+  
+  # Compute chromosome size
+  group_by(chr) %>% 
+  summarise(chr_len=max(v4.bp)) %>% 
+  
+  # Calculate cumulative position of each chromosome
+  mutate(tot=cumsum(chr_len)-chr_len) %>%
+  select(-chr_len) %>%
+  
+  # Add this info to the initial dataset
+  left_join(oxphos, ., by=c("chr"="chr")) %>%
+  
+  # Add a cumulative position of each SNP
+  arrange(chr, v4.bp) %>%
+  mutate( BPcum=v4.bp+tot)
+
+axisdf = oxphos_gg %>% group_by(chr) %>% summarize(center=( max(BPcum) + as.numeric(min(BPcum))) / 2 )
+
+
+
+ggplot(oxphos_gg, aes(x=BPcum, y= lod)) +
+    
+    # Show all points
+    geom_point(aes(color=description,shape = loc), alpha=0.8,size = 2) +
+  ylim(0,30)+ ggtitle("OxPhos pQTL")+
+  #geom_text(aes(label = description),hjust = 0, vjust = 1,size = 2) +
+    # custom X axis:
+    scale_x_continuous(label = axisdf$chr, breaks = axisdf$center) +
+  scale_shape_discrete()+
+     # remove space between plot area and x axis
+  
+    # Custom the theme:
+    theme_bw() +
+    theme( 
+      legend.position="right",
+      panel.border = element_blank(),
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor.x = element_blank()
+    )
+```
+
+#import genes of interest
+```{r}
+#load all GOI IDs
+SL_GOI <- read.csv("~/Desktop/rotation_Briggs/tmt.GOIs.csv", stringsAsFactors = F, header = T)
+table(SL_GOI$Category)
+PE_plastid_ribo <- SL_GOI[SL_GOI$Category == "PE plastid ribosome",]
+NE_plastid_ribo <- SL_GOI[SL_GOI$Category == "NE plastid ribosome",]
+PhANGs <- SL_GOI[SL_GOI$Category == "PhANGs",]
+PhAPGs <- SL_GOI[SL_GOI$Category == "PhAPGs",]
+EtBio <- SL_GOI[SL_GOI$Category == "Ethylene Biosynthesis",]
+Tetrapyrrole <- read.csv("~/Desktop/rotation_Briggs/TORStory.csv", stringsAsFactors = F, header = T)
+Tetrapyrrole <- Tetrapyrrole[!Tetrapyrrole$Accession == "?",]
+hub_genes <- read.csv("~/Desktop/rotation_Briggs/hub_genes.csv", header = T, stringsAsFactors = F)
+
+#find pqtls for proteins of interest 
+pqtl_NE_plastid_ribo <- pqtl[pqtl$gene %in% NE_plastid_ribo$Gene, ]
+pqtl_NE_plastid_ribo$Category <- "NE plastid ribo"
+pqtl_PhANGs <- pqtl[pqtl$gene %in% PhANGs$Gene, ]
+pqtl_PhANGs$Category <- "PhANGs"
+pqtl_etbio <- pqtl[pqtl$gene %in% EtBio$Gene, ]
+pqtl_etbio$Category <- "Ethylene Biosynthesis"
+pqtl_tetrapyrrole <- pqtl[pqtl$gene %in% Tetrapyrrole$Accession, ]
+pqtl_tetrapyrrole$Category <- "TOR"
+pqtl_hub_genes <- pqtl[pqtl$gene %in% hub_genes$Gene, ]
+pqtl_hub_genes$Category <- "hub genes"
+
+pqtl_GOIs <- data.frame(rbind(pqtl_NE_plastid_ribo, pqtl_etbio, pqtl_hub_genes, pqtl_PhANGs, pqtl_tetrapyrrole))
+write.csv(pqtl_GOIs, "pqtl_GOIs.csv")
+```
+

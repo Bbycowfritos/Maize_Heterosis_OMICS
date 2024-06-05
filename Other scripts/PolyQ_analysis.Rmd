@@ -1,0 +1,484 @@
+---
+title: "PolyQ"
+author: "Bridget Bai"
+date: '2022-06-30'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+#find maize polyQ proteins
+```{r}
+#Mo17 proteome
+
+Mo17_proteome <- readAAStringSet("~/Downloads/uniprot-proteome%3AUP000251960.fasta")
+Mo17_proteome_seq <- data.frame(names(Mo17_proteome),paste(Mo17_proteome))
+Mo17_polyQ_5 <- Mo17_proteome_seq[grep("QQQQQ",Mo17_proteome_seq$V3),]
+Mo17_polyQ_5$max_Q <- sapply(strapply(Mo17_polyQ_5$V3,"Q+",nchar),max)
+Mo17_polyQ_5$GID <- GID_convert_Mo17[match(Mo17_polyQ_5$V1,GID_convert_Mo17$From),"To"]
+Mo17_polyQ_5$v4_gene_model <- v4_annot[match(Mo17_polyQ_5$GID,v4_annot$Entrez),"v4_gene_model"]
+Mo17_polyQ_5$Protein <- protein_annot[match(Mo17_polyQ_5$v4_gene_model,protein_annot$Gene),"Protein"]
+Mo17_polyQ_5$nAA <- nchar(Mo17_polyQ_5$V3)
+Mo17_polyQ_5$GeneName <- gene_name_convert_Mo17[match(Mo17_polyQ_5$V1,gene_name_convert_Mo17$From),"To"]
+B73_proteome <- readAAStringSet("~/Downloads/uniprot-proteome%3AUP000007305-2.fasta")
+B73_proteome_seq <- data.frame(names(B73_proteome),paste(B73_proteome))
+B73_polyQ_5 <- B73_proteome_seq[grep("QQQQQ",B73_proteome_seq$paste.B73_proteome.),]
+B73_polyQ_5$max_Q <- sapply(strapply(B73_polyQ_5$paste.B73_proteome.,"Q+",nchar),max)
+
+B73_polyQ_5$GeneName <- gene_name_convert_B73[match(B73_polyQ_5$UniprotID,gene_name_convert_B73$From),"To"]
+B73_polyQ_5$v4 <- v4_annot[match(B73_polyQ_5$GeneName,v4_annot$Entrez),"v4_gene_model"]
+B73_polyQ_5[is.na(B73_polyQ_5$GeneName),"GeneName"] <- ""
+B73_polyQ_5[B73_polyQ_5$GeneName == "GRMZM2G138689","GeneName"] <-
+v4_annot[match("GRMZM2G138689",v4_annot$v3_gene_model),"v4_gene_model"]
+B73_polyQ_5[grep("ZEAM",B73_polyQ_5$GeneName),"v4"] <- substr(B73_polyQ_5[grep("ZEAM",B73_polyQ_5$GeneName),"GeneName"], start = 10, stop = 23)
+B73_polyQ_5$Protein_annotation <- 
+protein_annot[match(B73_polyQ_5$v4,protein_annot$Gene),"Protein"]
+B73_polyQ_5_nonduplicated <- B73_polyQ_5[-which(duplicated(B73_polyQ_5$v4)),]
+B73_polyQ_5_nonduplicated <- B73_polyQ_5_nonduplicated[-grep("only",B73_polyQ_5_nonduplicated$Protein_annotation),]
+B73_polyQ_5$Length <- nchar(B73_polyQ_5$Peptides)
+  
+  write.csv(Mo17_polyQ_5,"Mo17_PolyQ.csv")
+GID_convert_Mo17 <- read.csv("~/Downloads/uniprot-download_true_format_xlsx-2022.07.06-03.40.08.10.csv", header = T, stringsAsFactors = F)
+gene_name_convert_Mo17 <- read.csv("~/Downloads/uniprot-download_true_format_xlsx-2022.07.06-05.01.39.06.csv",header = T,stringsAsFactors = F)
+gene_name_convert_B73 <- read.csv("~/Downloads/uniprot-download_true_format_xlsx-2022.07.07-06.14.00.84.csv", header = T, stringsAsFactors = F)
+```
+
+
+#compare 6H parents
+```{r}
+protein_6H <- protein_all_genotype[,c(grep("6Hybrid",colnames(protein_all_genotype)),164:166)]
+protein_6H$B73 <- rowMeans(protein_6H[,c("X6Hybrid.B73.r1","X6Hybrid.B73.r2","X6Hybrid.B73.r3")])
+protein_6H$Mo17 <- rowMeans(protein_6H[,c("X6Hybrid.Mo17.r1","X6Hybrid.Mo17.r2","X6Hybrid.Mo17.r3")])
+protein_6H$B84 <- rowMeans(protein_6H[,c("X6Hybrid.B84.r1","X6Hybrid.B84.r2","X6Hybrid.B84.r3")])
+protein_6H$A682 <- rowMeans(protein_6H[,c("X6Hybrid.A682.r1","X6Hybrid.A682.r2","X6Hybrid.A682.r3")])
+tmt.6H$l2_B73_B84 <- log2(tmt.6H$B73/tmt.6H$B84)
+tmt.6H$l2_A682_Mo17 <- log2(tmt.6H$A682/tmt.6H$Mo17)
+tmt.6H$l2_B73_Mo17 <- log2(tmt.6H$B73/tmt.6H$Mo17)
+tmt.6H$l2_B73_A682 <- log2(tmt.6H$B73/tmt.6H$A682)
+tmt.6H$l2_Mo17_B84 <- log2(tmt.6H$Mo17/tmt.6H$B84)
+#significantly different proteins
+tmt.6H$B73_B84_sig <- ttestFun(tmt.6H, c("X6Hybrid.B73.r1","X6Hybrid.B73.r2","X6Hybrid.B73.r3"),c("X6Hybrid.B84.r1","X6Hybrid.B84.r2","X6Hybrid.B84.r3"))
+
+tmt.6H$A682_Mo17_sig <- ttestFun(tmt.6H, c("X6Hybrid.A682.r1","X6Hybrid.A682.r2","X6Hybrid.A682.r3"),c("X6Hybrid.Mo17.r1","X6Hybrid.Mo17.r2","X6Hybrid.Mo17.r3"))
+
+tmt.6H$B73_Mo17_sig <- ttestFun(tmt.6H, c("X6Hybrid.B73.r1","X6Hybrid.B73.r2","X6Hybrid.B73.r3"),c("X6Hybrid.Mo17.r1","X6Hybrid.Mo17.r2","X6Hybrid.Mo17.r3"))
+
+tmt.6H$B73_A682_sig <- ttestFun(tmt.6H, c("X6Hybrid.B73.r1","X6Hybrid.B73.r2","X6Hybrid.B73.r3"), c("X6Hybrid.A682.r1","X6Hybrid.A682.r2","X6Hybrid.A682.r3"))
+
+tmt.6H$Mo17_B84_sig <- ttestFun(tmt.6H, c("X6Hybrid.Mo17.r1","X6Hybrid.Mo17.r2","X6Hybrid.Mo17.r3"), c("X6Hybrid.B84.r1","X6Hybrid.B84.r2","X6Hybrid.B84.r3"))
+
+tmt.6H$B73xMo17_MP1 <- rowMeans(tmt.6H[,c("X6Hybrid.B73.r1","X6Hybrid.Mo17.r1")])
+tmt.6H$B73xMo17_MP2 <- rowMeans(tmt.6H[,c("X6Hybrid.B73.r2","X6Hybrid.Mo17.r2")])
+tmt.6H$B73xMo17_MP3 <- rowMeans(tmt.6H[,c("X6Hybrid.B73.r3","X6Hybrid.Mo17.r3")])
+
+tmt.6H$B73xB84_MP1 <- rowMeans(tmt.6H[,c("X6Hybrid.B73.r1","X6Hybrid.B84.r1")])
+tmt.6H$B73xB84_MP2 <- rowMeans(tmt.6H[,c("X6Hybrid.B73.r2","X6Hybrid.B84.r2")])
+tmt.6H$B73xB84_MP3 <- rowMeans(tmt.6H[,c("X6Hybrid.B73.r3","X6Hybrid.B84.r3")])
+
+tmt.6H$B73xA682_MP1 <- rowMeans(tmt.6H[,c("X6Hybrid.B73.r1","X6Hybrid.A682.r1")])
+tmt.6H$B73xA682_MP2 <- rowMeans(tmt.6H[,c("X6Hybrid.B73.r2","X6Hybrid.A682.r2")])
+tmt.6H$B73xA682_MP3 <- rowMeans(tmt.6H[,c("X6Hybrid.B73.r3","X6Hybrid.A682.r3")])
+
+tmt.6H$Mo17xA682_MP1 <- rowMeans(tmt.6H[,c("X6Hybrid.Mo17.r1","X6Hybrid.A682.r1")])
+tmt.6H$Mo17xA682_MP2 <- rowMeans(tmt.6H[,c("X6Hybrid.Mo17.r2","X6Hybrid.A682.r2")])
+tmt.6H$Mo17xA682_MP3 <- rowMeans(tmt.6H[,c("X6Hybrid.Mo17.r3","X6Hybrid.A682.r3")])
+
+tmt.6H$Mo17xB84_MP1 <- rowMeans(tmt.6H[,c("X6Hybrid.Mo17.r1","X6Hybrid.B84.r1")])
+tmt.6H$Mo17xB84_MP2 <- rowMeans(tmt.6H[,c("X6Hybrid.Mo17.r2","X6Hybrid.B84.r2")])  
+tmt.6H$Mo17xB84_MP3 <- rowMeans(tmt.6H[,c("X6Hybrid.Mo17.r3","X6Hybrid.B84.r3")])
+
+tmt.6H$B73xMo17_sig <- ttestFun(tmt.6H, c("X6Hybrid.B73xMo17.r1","X6Hybrid.B73xMo17.r2","X6Hybrid.B73xMo17.r3"), c("B73xMo17_MP1","B73xMo17_MP2","B73xMo17_MP3"))
+tmt.6H$Mo17xB73_sig <- ttestFun(tmt.6H, c("X6Hybrid.Mo17xB73.r1","X6Hybrid.Mo17xB73.r2","X6Hybrid.Mo17xB73.r3"), c("B73xMo17_MP1","B73xMo17_MP2","B73xMo17_MP3"))
+tmt.6H$B73xB84_sig <- ttestFun(tmt.6H, c("X6Hybrid.B84xB73.r1","X6Hybrid.B84xB73.r2","X6Hybrid.B84xB73.r3"), c("B73xB84_MP1","B73xB84_MP2","B73xB84_MP3"))
+tmt.6H$B73xA682_sig <- ttestFun(tmt.6H, c("X6Hybrid.A682xB73.r1","X6Hybrid.A682xB73.r2","X6Hybrid.A682xB73.r3"), c("B73xA682_MP1","B73xA682_MP2","B73xA682_MP3"))
+tmt.6H$Mo17xA682_sig <- ttestFun(tmt.6H, c("X6Hybrid.A682xMo17.r1","X6Hybrid.A682xMo17.r2","X6Hybrid.A682xMo17.r3"), c("Mo17xA682_MP1","Mo17xA682_MP2","Mo17xA682_MP3"))
+tmt.6H$Mo17xB84_sig <- ttestFun(tmt.6H, c("X6Hybrid.B84xMo17.r1","X6Hybrid.B84xMo17.r2","X6Hybrid.B84xMo17.r3"), c("Mo17xB84_MP1","Mo17xB84_MP2","Mo17xB84_MP3"))
+
+MP_sig <- tmt.6H[,c(89,91)] < 0.05
+hybrid_sig <- tmt.6H[which(rowSums(MP_sig) == 2),c("Accession","Protein","Gene","B73xMo17.MP","Mo17xB73.MP","B84xB73.MP","B84xMo17.MP","A682xB73.MP","A682xMo17.MP","B73xMo17_sig","Mo17xB73_sig","B73xB84_sig","B73xA682_sig","Mo17xA682_sig","Mo17xB84_sig")]
+hybrid_sig_nonsimilar <- hybrid_sig[-which(hybrid_sig$B73xB84_sig < 0.05),]
+hybrid_sig_nonsimilar <- hybrid_sig_nonsimilar[-which(hybrid_sig_nonsimilar$Mo17xA682_sig < 0.05),]
+hybrid_sig_similar <- hybrid_sig[-which(hybrid_sig$B73xMo17_sig < 0.05),]
+hybrid_sig_similar <- hybrid_sig_similar[-which(hybrid_sig_similar$Mo17xB73_sig < 0.05),]
+hybrid_sig_similar <- hybrid_sig_similar[-which(hybrid_sig_similar$Mo17xB84_sig < 0.05),]
+
+tmt.6H$Category <- SL_GOIs[match(tmt.6H$Gene,SL_GOIs$Gene),"Category"]
+selected_category <- c("PhAPGs","PhANGs","NE plastid ribosome","PE plastid ribosome","Ethylene Biosynthesis")
+tmt.6H_selected_category <- tmt.6H[which(tmt.6H$Category %in% selected_category), c("Accession","Protein","Gene","B73xMo17.MP","Mo17xB73.MP","B84xB73.MP","B84xMo17.MP","A682xB73.MP","A682xMo17.MP","B73xMo17_sig","Mo17xB73_sig","B73xB84_sig","B73xA682_sig","Mo17xA682_sig","Mo17xB84_sig","Category")]
+
+tmt.6H_selected_category[,c(2:9,16)] %>%
+  group_by(Category) %>%
+  summarise(B73xMo17.MP = mean(B73xMo17.MP),Mo17xB73.MP = mean(Mo17xB73.MP),B84xB73.MP = mean(B84xB73.MP),B84xMo17.MP = mean(B84xMo17.MP),A682xB73.MP = mean(A682xB73.MP),A682xMo17.MP = mean(A682xMo17.MP))
+
+
+
+
+protein_6H_sig_count <- data.frame()
+protein_6H_sig_count[1,1:5] <- ""
+
+for (i in 1:ncol(protein_6H_sig_count)){
+
+    protein_6H_sig_count[1,i] <- length(which(abs(tmt.6H[,i+64]) > log2(1.3) & tmt.6H[,i+59] <= 0.05))
+  }
+
+colnames(protein_6H_sig_count) <- colnames(tmt.6H)[65:69]
+tmt.6H$sum_similar <- ""
+tmt.6H$sum_other <- ""
+
+tmt_6H_sig_all <- tmt.6H[,60:64] <= 0.05
+
+for(i in 1:nrow(tmt_6H_sig_all)){
+  tmt.6H[i,"sum_similar"] <- sum(tmt_6H_sig_all[i,1:2])
+}
+
+for(i in 1:nrow(tmt_6H_sig_all)){
+  tmt.6H[i,"sum_other"] <- sum(tmt_6H_sig_all[i,3:5])
+}
+
+sig_protein_6H <- tmt.6H[which(tmt.6H$sum_similar == 0 & tmt.6H$sum_other == 3), c(6,12:13,54:71)]
+sig_protein_6H$Category <- SL_GOIs[match(sig_protein_6H$Accession,SL_GOIs$Accession),"Category"]
+sig_protein_6H$Pathway <- candidates_all[match(sig_protein_6H$Gene,candidates_all$Gene),"Pathway"]
+
+B73_B84_sig <- tmt.6H[,c("Accession","Protein","Gene","l2_B73_B84","B73_B84_sig")]
+B73_B84_sig <- B73_B84_sig[-which(B73_B84_sig$B73_B84_sig > 0.05),]
+#B73_B84_sig <- B73_B84_sig[-grep("only",B73_B84_sig$Accessions),]
+#B73_B84_sig <- B73_B84_sig[-grep("NaN",B73_B84_sig$B73_B84),]
+#B73_B84_sig$Accession <- substr(B73_B84_sig$Accessions, start = 1, stop = 14)
+B73_B84_sig$Category <- SL_GOIs[match(B73_B84_sig$Gene,SL_GOIs$Gene),"Category"]
+B73_B84_sig$Pathway <- candidates_all[match(B73_B84_sig$Gene,candidates_all$Gene),"Pathway"]
+B73_B84_sig <- B73_B84_sig[which(abs(B73_B84_sig$l2_B73_B84) >log2(1.3)),]
+
+A682_Mo17_sig <- tmt.6H[,c("Accession","Protein","Gene","l2_A682_Mo17","A682_Mo17_sig")]
+A682_Mo17_sig <- A682_Mo17_sig[-which(A682_Mo17_sig$A682_Mo17_sig > 0.05),]
+#A682_Mo17_sig <- A682_Mo17_sig[-grep("only",A682_Mo17_sig$Accessions),]
+#A682_Mo17_sig <- A682_Mo17_sig[-grep("NaN",A682_Mo17_sig$A682_Mo17),]
+#A682_Mo17_sig$Accession <- substr(A682_Mo17_sig$Accessions, start = 1, stop = 14)
+A682_Mo17_sig$Category <- SL_GOIs[match(A682_Mo17_sig$Gene,SL_GOIs$Gene),"Category"]
+A682_Mo17_sig$Pathway <- candidates_all[match(A682_Mo17_sig$Gene,candidates_all$Gene),"Pathway"]
+A682_Mo17_sig <- A682_Mo17_sig[which(abs(A682_Mo17_sig$l2_A682_Mo17) >log2(1.3)),]
+
+B73_Mo17_sig <- protein_6H[,c("Accessions","Protein","Gene","B73_Mo17","B73_Mo17_sig")]
+B73_Mo17_sig <- B73_Mo17_sig[-which(B73_Mo17_sig$B73_Mo17_sig > 0.05),]
+B73_Mo17_sig <- B73_Mo17_sig[-grep("only",B73_Mo17_sig$Accessions),]
+B73_Mo17_sig <- B73_Mo17_sig[-grep("NaN",B73_Mo17_sig$B73_Mo17),]
+B73_Mo17_sig$Accession <- substr(B73_Mo17_sig$Accessions, start = 1, stop = 14)
+B73_Mo17_sig$Category <- SL_GOIs[match(B73_Mo17_sig$Accession,SL_GOIs$Gene),"Category"]
+B73_Mo17_sig$Pathway <- candidates_all[match(B73_Mo17_sig$Accession,candidates_all$Gene),"Pathway"]
+
+```
+#compare 6H
+```{r}
+protein_6H <- protein_all_genotype[,c(40:69,159,166)]
+colnames(protein_6H)[32] <- "Protein"
+protein_6H$Gene <- substr(protein_6H$Accession, start = 1, stop = 14)
+protein_6H <- protein_6H[-grep("only",protein_6H$Accession),]
+protein_6H <- protein_6H[-which(protein_6H$X6Hybrid.B73.r3 == 0),]
+protein_6H_0 <- protein_6H[,1:30] == 0
+protein_6H <- protein_6H[which(rowSums(protein_6H_0) == 0),]
+
+#averages
+protein_6H$B73 <- rowMeans(protein_6H[,c("X6Hybrid.B73.r1", "X6Hybrid.B73.r2", "X6Hybrid.B73.r3")])
+protein_6H$Mo17 <- rowMeans(protein_6H[,c("X6Hybrid.Mo17.r1", "X6Hybrid.Mo17.r2", "X6Hybrid.Mo17.r3")])
+protein_6H$B73xMo17 <- rowMeans(protein_6H[,c("X6Hybrid.B73xMo17.r1", "X6Hybrid.B73xMo17.r2", "X6Hybrid.B73xMo17.r3")])
+protein_6H$Mo17xB73 <- rowMeans(protein_6H[,c("X6Hybrid.Mo17xB73.r1", "X6Hybrid.Mo17xB73.r2", "X6Hybrid.Mo17xB73.r3")])
+protein_6H$B84 <- rowMeans(protein_6H[,c("X6Hybrid.B84.r1", "X6Hybrid.B84.r2", "X6Hybrid.B84.r3")])
+protein_6H$B84xB73 <- rowMeans(protein_6H[,c("X6Hybrid.B84xB73.r1", "X6Hybrid.B84xB73.r2", "X6Hybrid.B84xB73.r3")])
+protein_6H$B84xMo17 <- rowMeans(protein_6H[,c("X6Hybrid.B84xMo17.r1", "X6Hybrid.B84xMo17.r2", "X6Hybrid.B84xMo17.r3")])
+protein_6H$A682 <- rowMeans(protein_6H[,c("X6Hybrid.A682.r1", "X6Hybrid.A682.r2", "X6Hybrid.A682.r3")])
+protein_6H$A682xB73 <- rowMeans(protein_6H[,c("X6Hybrid.A682xB73.r1", "X6Hybrid.A682xB73.r2", "X6Hybrid.A682xB73.r3")])
+protein_6H$A682xMo17 <- rowMeans(protein_6H[,c("X6Hybrid.A682xMo17.r1", "X6Hybrid.A682xMo17.r2", "X6Hybrid.A682xMo17.r3")])
+
+#MPs
+protein_6H$B73xMo17_MP1 <- rowMeans(protein_6H[,c("X6Hybrid.B73.r1","X6Hybrid.Mo17.r1")])
+protein_6H$B73xMo17_MP2 <- rowMeans(protein_6H[,c("X6Hybrid.B73.r2","X6Hybrid.Mo17.r2")])
+protein_6H$B73xMo17_MP3 <- rowMeans(protein_6H[,c("X6Hybrid.B73.r3","X6Hybrid.Mo17.r3")])
+
+protein_6H$B84xB73_MP1 <- rowMeans(protein_6H[,c("X6Hybrid.B73.r1","X6Hybrid.B84.r1")])
+protein_6H$B84xB73_MP2 <- rowMeans(protein_6H[,c("X6Hybrid.B73.r2","X6Hybrid.B84.r2")])
+protein_6H$B84xB73_MP3 <- rowMeans(protein_6H[,c("X6Hybrid.B73.r3","X6Hybrid.B84.r3")])
+
+protein_6H$A682xB73_MP1 <- rowMeans(protein_6H[,c("X6Hybrid.B73.r1","X6Hybrid.A682.r1")])
+protein_6H$A682xB73_MP2 <- rowMeans(protein_6H[,c("X6Hybrid.B73.r2","X6Hybrid.A682.r2")])
+protein_6H$A682xB73_MP3 <- rowMeans(protein_6H[,c("X6Hybrid.B73.r3","X6Hybrid.A682.r3")])
+
+protein_6H$A682xMo17_MP1 <- rowMeans(protein_6H[,c("X6Hybrid.Mo17.r1","X6Hybrid.A682.r1")])
+protein_6H$A682xMo17_MP2 <- rowMeans(protein_6H[,c("X6Hybrid.Mo17.r2","X6Hybrid.A682.r2")])
+protein_6H$A682xMo17_MP3 <- rowMeans(protein_6H[,c("X6Hybrid.Mo17.r3","X6Hybrid.A682.r3")])
+protein_6H$A682xMo17.MP3 <- log2(protein_6H$X6Hybrid.A682xMo17.r3/protein_6H$A682xMo17_MP3)
+protein_6H[which(abs(protein_6H$A682xMo17.MP3) >log2(1.3)),]
+
+protein_6H$B84xMo17_MP1 <- rowMeans(protein_6H[,c("X6Hybrid.Mo17.r1","X6Hybrid.B84.r1")])
+protein_6H$B84xMo17_MP2 <- rowMeans(protein_6H[,c("X6Hybrid.Mo17.r2","X6Hybrid.B84.r2")])  
+protein_6H$B84xMo17_MP3 <- rowMeans(protein_6H[,c("X6Hybrid.Mo17.r3","X6Hybrid.B84.r3")])
+
+
+#Calculate hyb/MP ratios
+protein_6H$B73xMo17.MP <- protein_6H$B73xMo17/rowMeans(protein_6H[,c("B73", "Mo17")])
+protein_6H$Mo17xB73.MP <- protein_6H$Mo17xB73/rowMeans(protein_6H[,c("B73", "Mo17")])
+protein_6H$B84xB73.MP <- protein_6H$B84xB73/rowMeans(protein_6H[,c("B84", "B73")])
+protein_6H$B84xMo17.MP <- protein_6H$B84xMo17/rowMeans(protein_6H[,c("B84", "Mo17")])
+protein_6H$A682xB73.MP <- protein_6H$A682xB73/rowMeans(protein_6H[,c("A682", "B73")])
+protein_6H$A682xMo17.MP <- protein_6H$A682xMo17/rowMeans(protein_6H[,c("A682", "Mo17")])
+
+#parent over parent
+protein_6H$B73_Mo17 <- protein_6H$B73/protein_6H$Mo17
+protein_6H$Mo17_B73 <- protein_6H$Mo17/protein_6H$B73
+protein_6H$B84_B73 <- protein_6H$B84/protein_6H$B73
+protein_6H$B84_Mo17 <- protein_6H$B84/protein_6H$Mo17
+protein_6H$A682_B73 <- protein_6H$A682/protein_6H$B73
+protein_6H$A682_Mo17 <- protein_6H$A682/protein_6H$Mo17
+
+
+#significance
+protein_6H$B73xMo17.MP_sig <- ttestFun(protein_6H, c("X6Hybrid.B73xMo17.r1","X6Hybrid.B73xMo17.r2","X6Hybrid.B73xMo17.r3"), c("B73xMo17_MP1","B73xMo17_MP2","B73xMo17_MP3"))
+protein_6H$Mo17xB73_sig <- ttestFun(protein_6H, c("X6Hybrid.Mo17xB73.r1","X6Hybrid.Mo17xB73.r2","X6Hybrid.Mo17xB73.r3"), c("B73xMo17_MP1","B73xMo17_MP2","B73xMo17_MP3"))
+protein_6H$B84xB73_sig <- ttestFun(protein_6H, c("X6Hybrid.B84xB73.r1","X6Hybrid.B84xB73.r2","X6Hybrid.B84xB73.r3"), c("B84xB73_MP1","B84xB73_MP2","B84xB73_MP3"))
+protein_6H$A682xB73_sig <- ttestFun(protein_6H, c("X6Hybrid.A682xB73.r1","X6Hybrid.A682xB73.r2","X6Hybrid.A682xB73.r3"), c("A682xB73_MP1","A682xB73_MP2","A682xB73_MP3"))
+protein_6H$A682xMo17_sig <- ttestFun(protein_6H, c("X6Hybrid.A682xMo17.r1","X6Hybrid.A682xMo17.r2","X6Hybrid.A682xMo17.r3"), c("A682xMo17_MP1","A682xMo17_MP2","A682xMo17_MP3"))
+protein_6H$B84xMo17_sig <- ttestFun(protein_6H, c("X6Hybrid.B84xMo17.r1","X6Hybrid.B84xMo17.r2","X6Hybrid.B84xMo17.r3"), c("B84xMo17_MP1","B84xMo17_MP2","B84xMo17_MP3"))
+
+protein_6H_plot <- protein_6H[,c(32:33,59:70)]
+protein_6H_plot$Pathway <- candidates_all_GOIs[match(protein_6H_plot$Gene,candidates_all_GOIs$Gene),"Pathway"]
+protein_6H_plot <- protein_6H_plot[-which(is.na(protein_6H_plot$Pathway)),]
+
+protein_6H_count <- NULL
+colSums(protein_6H[,59:64] > 1.2|protein_6H[,59:64] <0.8)
+protein_6H_count <- cbind(protein_6H_count,data.frame(t(colSums(protein_6H[,59:64] > 1.5|protein_6H[,59:64] <0.5))))
+protein_6H_parent_count <- NULL
+protein_6H_parent_count <- cbind(protein_6H_parent_count,data.frame(t(colSums(protein_6H_1[,9:14] > 1.5|protein_6H_1[,9:14] < 0.5))))
+
+B84_B73 <- protein_6H_1[which(protein_6H_1$B84_B73 > 1.5|protein_6H_1$B84_B73 < 0.5),]
+A682_Mo17 <- protein_6H_1[which(protein_6H_1$A682_Mo17 > 1.5|protein_6H_1$A682_Mo17 < 0.5),]
+
+#protein_6H_1 <- protein_6H[,c(1:10,32:33)]
+protein_6H_1$B73_Mo17 <- log2(protein_6H_1$X6Hybrid.B73.r1/protein_6H_1$X6Hybrid.Mo17.r1)
+protein_6H_1$Mo17_B73 <- log2(protein_6H_1$X6Hybrid.Mo17.r1/protein_6H_1$X6Hybrid.B73.r1)
+protein_6H_1$B84_B73 <- log2(protein_6H_1$X6Hybrid.B84.r1/protein_6H_1$X6Hybrid.B73.r1)
+protein_6H_1$B84_Mo17 <- log2(protein_6H_1$X6Hybrid.B84.r1/protein_6H_1$X6Hybrid.Mo17.r1)
+protein_6H_1$A682_B73 <- log2(protein_6H_1$X6Hybrid.A682.r1/protein_6H_1$X6Hybrid.B73.r1)
+protein_6H_1$A682_Mo17 <- log2(protein_6H_1$X6Hybrid.A682.r1/protein_6H_1$X6Hybrid.Mo17.r1)
+
+protein_6H_1$B73xMo17.MP <- log2(protein_6H_1$X6Hybrid.B73xMo17.r1/rowMeans(protein_6H_1[,c("X6Hybrid.B73.r1","X6Hybrid.Mo17.r1")]))
+
+protein_6H_1$Mo17xB73.MP <- log2(protein_6H_1$X6Hybrid.Mo17xB73.r1/rowMeans(protein_6H_1[,c("X6Hybrid.B73.r1","X6Hybrid.Mo17.r1")]))
+
+protein_6H_1$B84xB73.MP <- log2(protein_6H_1$X6Hybrid.B84xB73.r1/rowMeans(protein_6H_1[,c("X6Hybrid.B84.r1","X6Hybrid.B73.r1")]))
+
+protein_6H_1$B84xMo17.MP <- log2(protein_6H_1$X6Hybrid.B84xMo17.r1/rowMeans(protein_6H_1[,c("X6Hybrid.B84.r1","X6Hybrid.Mo17.r1")]))
+
+protein_6H_1$A682xB73.MP <- log2(protein_6H_1$X6Hybrid.A682xB73.r1/rowMeans(protein_6H_1[,c("X6Hybrid.B73.r1","X6Hybrid.A682.r1")]))
+
+protein_6H_1$A682xMo17.MP <- log2(protein_6H_1$X6Hybrid.A682xMo17.r1/rowMeans(protein_6H_1[,c("X6Hybrid.A682.r1","X6Hybrid.Mo17.r1")]))
+                                                                       
+protein_diff_all_6H <- protein_6H_1[which(rowSums(abs(protein_6H_1[,c(15,18)]) > log2(1.5)) ==2),]
+protein_diff_hyb_6H <- protein_6H_1[which(rowSums(abs(protein_6H_1[,20:25]) > log2(1.2)) ==6),]
+protein_diff_hyb_count_r1 <- data.frame(colSums(abs(protein_6H_1[,14:19])>log2(1.3)))
+protein_diff_parent_count_r1 <- data.frame(colSums(abs(protein_6H_1[,20:25])>log2(1.5)))
+
+protein_diff_hyb_count_r2 <- data.frame(colSums(abs(protein_6H_1[,20:25])>log2(1.3)))
+protein_diff_parent_count_r2 <- data.frame(colSums(abs(protein_6H_1[,14:19])>log2(1.5)))
+
+protein_diff_hyb_count_r3 <- data.frame(colSums(abs(protein_6H_1[,20:25])>log2(1.3)))
+protein_diff_parent_count_r3 <- data.frame(colSums(abs(protein_6H_1[,14:19])>log2(1.5)))
+
+protein_diff_hyb_count <- rbind(protein_diff_hyb_count_r1,protein_diff_hyb_count_r2,protein_diff_hyb_count_r3)
+protein_diff_hyb_count$replicate <- c(rep("r1",6),rep("r2",6),rep("r3",6))
+protein_diff_hyb_count$genotype <- rownames(protein_diff_hyb_count)
+
+protein_diff_parent_count <- rbind(protein_diff_parent_count_r1,protein_diff_parent_count_r2,protein_diff_parent_count_r3)
+protein_diff_parent_count$replicate <- c(rep("r1",6),rep("r2",6),rep("r3",6))
+protein_diff_parent_count$genotype <- rownames(protein_diff_parent_count)
+protein_diff_parent_count[7:18,"genotype"] <- rep(protein_diff_parent_count[1:6,"genotype"],2)
+protein_diff_parent_count$genotype <- factor(protein_diff_parent_count$genotype, levels = c("B73_Mo17","Mo17_B73","B84_B73","B84_Mo17","A682_B73","A682_Mo17"))
+
+protein_6H_GOI_all <- merge.data.frame(protein_6H_MP_all[,c(1:18,20)],protein_6H_GOI[,1:5], by.x = "Gene",by.y = "Gene")
+protein_6H_GOI_all <- protein_6H_GOI_all[-which(duplicated(protein_6H_GOI_all$B73xMo17_MP1)),]
+
+ggplot(protein_diff_parent_count, aes(replicate,count,fill = genotype))+ geom_bar(stat = "identity",color = "black", position = "dodge", alpha = 0.9) +
+  scale_fill_manual(values = c("B73_Mo17" = "skyblue", "Mo17_B73" = "darkblue","A682_B73" = "salmon","A682_Mo17" = "darkorange", "B84_B73" = "lightgreen", "B84_Mo17" = "darkgreen"))+ggtitle("Number of differentially expressed proteins over 50% by replicates")
+
+protein_diff_hyb_count$genotype <- factor(protein_diff_hyb_count$genotype, levels = c("B73xMo17","Mo17xB73","B84xB73","B84xMo17","A682xB73","A682xMo17"))
+
+protein_diff_hyb_all <- protein_6H_1[which(rowSums(abs(protein_6H_1[,20:25]) > log2(1.2)) == 6),]
+protein_diff_hyb_all <- protein_diff_hyb_all[-c(5,7),]
+protein_diff_hyb_all$Pathway <- candidates_all_GOIs[match(protein_diff_hyb_all$Gene,candidates_all_GOIs$Gene),"Pathway"]
+protein_diff_hyb_all[,c(12:13,20:25)]
+
+B84_B73_hyb <- protein_6H_1[which(abs(protein_6H_1$B84xB73.MP) > log2(1.2)),12:25] 
+B84_B73_hyb[rowSums(abs(B84_B73_hyb[,c(9:10,12:14)]) < log2(1.1)) ==5,]
+
+B84_M682 <- protein_6H_1[rowSums(abs(protein_6H_1[,c(22,25)]) > log2(1.2)) == 2,]
+B84_M682[rowSums(abs(B84_M682[,c(20:21,23:24)]) < log2(1.15)) == 4,]
+
+protein_6H_GOI <- merge.data.frame(candidates_all_GOIs,protein_6H_1[,c(11:13,20:25)], by.x = "Gene", by.y = "Gene")
+protein_6H_GOI <- protein_6H_GOI[-which(duplicated(protein_6H_GOI$B73xMo17.MP)),]
+protein_6H_GOI_mean <- protein_6H_GOI %>% group_by(Pathway) %>%
+  summarise(B73xMo17.MP = mean(B73xMo17.MP), Mo17xB73.MP = mean(Mo17xB73.MP), B84xB73.MP = mean(B84xB73.MP), B84xMo17.MP = mean(B84xMo17.MP), A682xB73.MP = mean(A682xB73.MP), A682xMo17.MP = mean(A682xMo17.MP))
+
+cor_6H_r1_PhANG <- data.frame(t(cor(as.numeric(protein_6H_GOI_mean[8,2:7]),t(protein_6H_1[,20:25]))))
+cor_6H_r1_PhANG$Gene <- protein_6H_1$Gene
+cor_6H_r1_PhANG$Protein <- protein_6H_1$Protein
+
+cor_6H_r1_NEPR <- data.frame(t(cor(as.numeric(protein_6H_GOI_mean[6,2:7]),t(protein_6H_1[,20:25]))))
+cor_6H_r1_NEPR$Gene <- protein_6H_1$Gene
+cor_6H_r1_NEPR$Protein <- protein_6H_1$Protein
+
+protein_6H$B73xMo17_MP1 <- protein_6H$X6Hybrid.B73xMo17.r1/rowMeans(protein_6H[,c("X6Hybrid.B73.r1","X6Hybrid.Mo17.r1")])
+
+protein_6H$B73xMo17_MP2 <- protein_6H$X6Hybrid.B73xMo17.r2/rowMeans(protein_6H[,c("X6Hybrid.B73.r2","X6Hybrid.Mo17.r2")])
+
+protein_6H$B73xMo17_MP3 <- protein_6H$X6Hybrid.B73xMo17.r3/rowMeans(protein_6H[,c("X6Hybrid.B73.r3","X6Hybrid.Mo17.r3")])
+
+protein_6H$Mo17xB73_MP1 <- protein_6H$X6Hybrid.Mo17xB73.r1/rowMeans(protein_6H[,c("X6Hybrid.B73.r1","X6Hybrid.Mo17.r1")])
+
+protein_6H$Mo17xB73_MP2 <- protein_6H$X6Hybrid.Mo17xB73.r2/rowMeans(protein_6H[,c("X6Hybrid.B73.r2","X6Hybrid.Mo17.r2")])
+
+protein_6H$Mo17xB73_MP3 <- protein_6H$X6Hybrid.Mo17xB73.r3/rowMeans(protein_6H[,c("X6Hybrid.B73.r3","X6Hybrid.Mo17.r3")])
+
+protein_6H$B84xB73_MP1 <- protein_6H$X6Hybrid.B84xB73.r1/rowMeans(protein_6H[,c("X6Hybrid.B73.r1","X6Hybrid.B84.r1")])
+
+protein_6H$B84xB73_MP2 <- protein_6H$X6Hybrid.B84xB73.r2/rowMeans(protein_6H[,c("X6Hybrid.B73.r2","X6Hybrid.B84.r2")])
+
+protein_6H$B84xB73_MP3 <- protein_6H$X6Hybrid.B84xB73.r3/rowMeans(protein_6H[,c("X6Hybrid.B73.r3","X6Hybrid.B84.r3")])
+
+protein_6H$B84xMo17_MP1 <- protein_6H$X6Hybrid.B84xMo17.r1/rowMeans(protein_6H[,c("X6Hybrid.Mo17.r1","X6Hybrid.B84.r1")])
+
+protein_6H$B84xMo17_MP2 <- protein_6H$X6Hybrid.B84xMo17.r2/rowMeans(protein_6H[,c("X6Hybrid.Mo17.r2","X6Hybrid.B84.r2")])
+
+protein_6H$B84xMo17_MP3 <- protein_6H$X6Hybrid.B84xMo17.r3/rowMeans(protein_6H[,c("X6Hybrid.Mo17.r3","X6Hybrid.B84.r3")])
+
+protein_6H$A682xB73_MP1 <- protein_6H$X6Hybrid.A682xB73.r1/rowMeans(protein_6H[,c("X6Hybrid.B73.r1","X6Hybrid.A682.r1")])
+
+protein_6H$A682xB73_MP2 <- protein_6H$X6Hybrid.A682xB73.r2/rowMeans(protein_6H[,c("X6Hybrid.B73.r2","X6Hybrid.A682.r2")])
+
+protein_6H$A682xB73_MP3 <- protein_6H$X6Hybrid.A682xB73.r3/rowMeans(protein_6H[,c("X6Hybrid.B73.r3","X6Hybrid.A682.r3")])
+
+protein_6H$A682xMo17_MP1 <- protein_6H$X6Hybrid.A682xMo17.r1/rowMeans(protein_6H[,c("X6Hybrid.Mo17.r1","X6Hybrid.A682.r1")])
+
+protein_6H$A682xMo17_MP2 <- protein_6H$X6Hybrid.A682xMo17.r2/rowMeans(protein_6H[,c("X6Hybrid.Mo17.r2","X6Hybrid.A682.r2")])
+
+protein_6H$A682xMo17_MP3 <- protein_6H$X6Hybrid.A682xMo17.r3/rowMeans(protein_6H[,c("X6Hybrid.Mo17.r3","X6Hybrid.A682.r3")])
+
+protein_6H$Pathway <- candidates_all_GOIs[match(protein_6H$Gene,candidates_all_GOIs$Gene),"Pathway"]
+
+Protein_6H$B73_Mo17_1 <- protein_6H$X6Hybrid.B73.r1/protein_6H$X6Hybrid.Mo17.r1
+Protein_6H$B73_Mo17_2 <- protein_6H$X6Hybrid.B73.r2/protein_6H$X6Hybrid.Mo17.r2
+Protein_6H$B73_Mo17_3 <- protein_6H$X6Hybrid.B73.r3/protein_6H$X6Hybrid.Mo17.r3
+
+Protein_6H$Mo17_B73_1 <- protein_6H$X6Hybrid.Mo17.r1/protein_6H$X6Hybrid.B73.r1
+Protein_6H$Mo17_B73_2 <- protein_6H$X6Hybrid.Mo17.r2/protein_6H$X6Hybrid.B73.r2
+Protein_6H$Mo17_B73_3 <- protein_6H$X6Hybrid.Mo17.r3/protein_6H$X6Hybrid.B73.r3
+
+
+
+
+protein_GOI_6H_mean <- protein_6H[,34:52] %>% 
+  group_by(Pathway) %>%
+  summarise(B73xMo17_MP1 = mean(B73xMo17_MP1), Mo17xB73_MP1 = mean(Mo17xB73_MP1), B84xB73_MP1 = mean(B84xB73_MP1), B84xMo17_MP1 = mean(B84xMo17_MP1), A682xB73_MP1 = mean(A682xB73_MP1), A682xMo17_MP1 = mean(A682xMo17_MP1),B73xMo17_MP2 = mean(B73xMo17_MP2), Mo17xB73_MP2 = mean(Mo17xB73_MP2), B84xB73_MP2 = mean(B84xB73_MP2), B84xMo17_MP2 = mean(B84xMo17_MP2), A682xB73_MP2 = mean(A682xB73_MP2), A682xMo17_MP2 = mean(A682xMo17_MP2),B73xMo17_MP3 = mean(B73xMo17_MP3), Mo17xB73_MP3 = mean(Mo17xB73_MP3), B84xB73_MP3 = mean(B84xB73_MP3), B84xMo17_MP3 = mean(B84xMo17_MP3), A682xB73_MP3 = mean(A682xB73_MP3), A682xMo17_MP3 = mean(A682xMo17_MP3))
+
+protein_GOI_hybrid_mean <- protein_6H[,c(5:10,15:20,25:30,52)] %>%
+  group_by(Pathway) %>%
+    summarise(B73xMo17_1 = mean(X6Hybrid.B73xMo17.r1), Mo17xB73_1 = mean(X6Hybrid.Mo17xB73.r1), B84xB73_1 = mean(X6Hybrid.B84xB73.r1), B84xMo17_1 = mean(X6Hybrid.B84xMo17.r1), A682xB73_1 = mean(X6Hybrid.A682xB73.r1), A682xMo17_1 = mean(X6Hybrid.A682xMo17.r1),B73xMo17_2 = mean(X6Hybrid.B73xMo17.r2), Mo17xB73_2 = mean(X6Hybrid.Mo17xB73.r2), B84xB73_2 = mean(X6Hybrid.B84xB73.r2), B84xMo17_2 = mean(X6Hybrid.B84xMo17.r2), A682xB73_2 = mean(X6Hybrid.A682xB73.r2), A682xMo17_2 = mean(X6Hybrid.A682xMo17.r2),B73xMo17_3 = mean(X6Hybrid.B73xMo17.r3), Mo17xB73_3 = mean(X6Hybrid.Mo17xB73.r3), B84xB73_3 = mean(X6Hybrid.B84xB73.r3), B84xMo17_3 = mean(X6Hybrid.B84xMo17.r3), A682xB73_3 = mean(X6Hybrid.A682xB73.r3), A682xMo17_3 = mean(X6Hybrid.A682xMo17.r3))
+
+protein_6H_inbred <- protein_6H[,c(1:4,11:14,21:24,52)]
+protein_6H_inbred[,1:4] <- protein_6H_inbred[,1:4]/protein_6H_inbred$X6Hybrid.B73.r1
+protein_6H_inbred[,5:8] <- protein_6H_inbred[,5:8]/protein_6H_inbred$X6Hybrid.B73.r2
+protein_6H_inbred[,9:12] <- protein_6H_inbred[,5:8]/protein_6H_inbred$X6Hybrid.B73.r3
+
+
+protein_GOI_inbred_mean <- protein_6H_inbred %>%
+  group_by(Pathway) %>%
+  summarise(B73_1 = mean(X6Hybrid.B73.r1),Mo17_1 = mean(X6Hybrid.Mo17.r1), B84_1 = mean(X6Hybrid.B84.r1), A682_1 = mean(X6Hybrid.A682.r1),B73_2 = mean(X6Hybrid.B73.r2),Mo17_2 = mean(X6Hybrid.Mo17.r2), B84_2 = mean(X6Hybrid.B84.r2), A682_2 = mean(X6Hybrid.A682.r2),B73_3 = mean(X6Hybrid.B73.r3),Mo17_3 = mean(X6Hybrid.Mo17.r3), B84_3 = mean(X6Hybrid.B84.r3), A682_3 = mean(X6Hybrid.A682.r3))
+
+protein_GOI_6H_mean <- protein_GOI_6H_mean[-c(2:5,9,11,15),]
+protein_GOI_inbred_mean <- protein_GOI_inbred_mean[-c(2:5,9,11,15),]
+
+protein_6H_GOI_matrix <- t(protein_GOI_6H_mean[,c(1:3,5:6,8:9,11:12,14:15,17:18)])
+protein_6H_GOI_matrix <- t(protein_GOI_6H_mean[,c(1,4,7,10,13,16,19)])
+colnames(protein_6H_GOI_matrix) <- protein_6H_GOI_matrix[1,]
+protein_6H_GOI_matrix <- protein_6H_GOI_matrix[-1,]
+protein_6H_cor_GOI <- cor(protein_6H_GOI_matrix,protein_6H_GOI_matrix)
+protein_6H_cor_pval <- corPvalueStudent(protein_6H_cor_GOI, 12)
+textMatrix = paste(signif(protein_6H_cor_GOI, 2), "\n(",
+                        signif(protein_6H_cor_pval, 1), ")", sep = "")  
+
+protein_GOI_inbred_matrix <- t(protein_GOI_inbred_mean[,1:5])
+colnames(protein_GOI_inbred_matrix) <- protein_GOI_inbred_matrix[1,]
+protein_GOI_inbred_matrix <- protein_GOI_inbred_matrix[-1,]
+protein_GOI_inbred_cor <- cor(protein_GOI_inbred_matrix,protein_GOI_inbred_matrix)
+protein_GOI_inbred_cor_pval <- corPvalueStudent(protein_GOI_inbred_cor, 4)
+textMatrix = paste(signif(acs_B73_GOI_cor, 2), "\n(",
+                        signif(acs_B73_GOI_cor_pval, 1), ")", sep = "")  
+
+
+par(mar = c(7, 9, 0.5, 0.5))
+labeledHeatmap(acs_B73_GOI_cor, yLabels =colnames(acs_B73_GOI_cor), #paste(colnames(acs_acs_GOI_cor),"\n",num_GOI[match(colnames(protein_GOI_inbred_cor),num_GOI$Var1),"Freq"]), 
+                 xLabels = colnames(acs_B73_GOI_cor),cex.lab = 0.6, colorLabels = F,
+             colors = viridis(30,alpha = 0.9,begin = 0.3,end = 1),
+             textMatrix = textMatrix,
+             setStdMargins = FALSE,
+             cex.text = 0.4,xLabelsAngle = 45,xLabelsAdj = 1)
+
+
+protein_diff_hyb_all[,c(12:13,20:26)]
+
+protein_6H_MP_all <- protein_6H[c(grep("_MP",colnames(protein_6H)),32:33)]
+protein_6H_MP_all <- protein_6H_MP_all[,c(1,16,4,13,7,10,2,17,5,14,8,11,3,18,6,15,9,12,19:20)]
+protein_6H_GOI_MP_cor <- data.frame(cor(t(protein_6H_GOI_all[c(1,4:10),2:19]),t(protein_6H_MP_all[,1:18])))
+colnames(protein_6H_GOI_MP_cor) <- protein_6H_MP_all$Gene
+protein_6H_GOI_MP_cor <- data.frame(t(protein_6H_GOI_MP_cor))
+protein_6H_GOI_MP_cor$Protein <- protein_6H_MP_all$Protein
+colnames(protein_6H_GOI_MP_cor) <- protein_6H_GOI_all[c(1,4:10),1]
+protein_6H_GOI_MP_cor$Pathway <- protein_6H_GOI[match(rownames(protein_6H_GOI_MP_cor),protein_6H_GOI$Gene),"Pathway"]
+
+
+
+protein_inbred_PhANG_cor <-data.frame( cor(t(protein_6H_inbred[,1:12]),t(protein_GOI_inbred_mean[7,2:13])))
+protein_inbred_PhANG_cor$Pathway <- protein_6H_inbred$Pathway
+protein_inbred_PhANG_cor$Protein <- protein_6H$Protein
+protein_inbred_PhANG_cor$Gene<- protein_6H$Gene
+
+protein_inbred_PhAPG_cor <-data.frame( cor(t(protein_6H_inbred[,1:12]),t(protein_GOI_inbred_mean[8,2:13])))
+protein_inbred_PhAPG_cor$Pathway <- protein_6H_inbred$Pathway
+protein_inbred_PhAPG_cor$Protein <- protein_6H$Protein
+
+protein_inbred_NEP_cor <-data.frame( cor(t(protein_6H_inbred[,1:12]),t(protein_GOI_inbred_mean[5,2:13])))
+protein_inbred_NEP_cor$Pathway <- protein_6H_inbred$Pathway
+protein_inbred_NEP_cor$Protein <- protein_6H$Protein
+
+protein_hybrid_PhANG_cor <- data.frame(cor(t(protein_6H[,c(5:6,8:9,15:16,18:19,25:26,28:29)]), t(protein_GOI_hybrid_mean[13,c(2:3,5:6,8:9,11:12,14:15,17:18)])))
+protein_hybrid_PhANG_cor$Pathway <- protein_6H$Pathway
+protein_hybrid_PhANG_cor$Protein <- protein_6H$Protein
+protein_hybrid_PhANG_cor$pval <- corPvalueStudent(protein_hybrid_PhANG_cor$Cor,nSamples = 12)
+protein_hybrid_PhANG_cor$Gene <- protein_6H$Gene
+
+protein_hybrid_NEP_cor <- data.frame(cor(t(protein_6H[,c(5:6,8:9,15:16,18:19,25:26,28:29)]), t(protein_GOI_hybrid_mean[10,c(2:3,5:6,8:9,11:12,14:15,17:18)])))
+protein_hybrid_NEP_cor$Pathway <- protein_6H$Pathway
+protein_hybrid_NEP_cor$Protein <- protein_6H$Protein
+
+
+#acs
+acs_mean_GOI <- acs %>%
+  group_by(Pathway) %>%
+  summarise(B73_1 = mean(B73.acs.B73.r1),B73_2 = mean(B73.acs.B73.r2), B73_3 = mean(B73.acs.B73.r3), B73_4 = mean(B73.acs.B73.r4), B73_5 = mean(B73.acs.B73.r5), acs_1 = mean(B73.acs.acs.r1), acs_2 = mean(B73.acs.acs.r2), acs_3 = mean(B73.acs.acs.r3), acs_4 = mean(B73.acs.acs.r4), acs_5 = mean(B73.acs.acs.r5))
+
+acs_B73_GOI_cor <- cor(acs_B73_mean_GOI,acs_B73_mean_GOI)
+acs_B73_GOI_cor_pval <- corPvalueStudent(acs_B73_GOI_cor,nSamples = 5)
+
+acs_acs_mean_GOI <- acs_mean_GOI[,c(1,7:11)]
+acs_acs_mean_GOI <- t(acs_acs_mean_GOI)
+colnames(acs_acs_mean_GOI) <- acs_acs_mean_GOI[1,]
+acs_acs_mean_GOI <- acs_acs_mean_GOI[-1,]
+acs_acs_GOI_cor <- cor(acs_acs_mean_GOI,acs_acs_mean_GOI)
+acs_acs_GOI_cor_pval <- corPvalueStudent(acs_acs_GOI_cor, nSamples = 5)
+acs_NEPR_cor <- data.frame(t(cor(acs_acs_mean_GOI[,8],t(acs[,7:11]))))
+acs_NEPR_cor$protein <- acs$Protein
+
+B73_NEPR_cor <- data.frame(t(cor(acs_B73_mean_GOI[,8],t(acs[,2:6]))))
+B73_NEPR_cor$protein <- acs$Protein
+
+acs2_cor <- data.frame(t(cor(t(acs[acs$Accession == "Zm00001d020686_T001",2:11]),t(acs[,2:11]))))
+acs2_cor$protein <- acs$Protein
+```
+

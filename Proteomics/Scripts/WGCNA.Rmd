@@ -1,0 +1,1513 @@
+---
+title: "WGCNA"
+author: "Bridget Bai"
+date: "3/31/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+#libraries
+```{r}
+library(ape)
+library(ggplot2)
+library(WGCNA)
+options(stringsAsFactors = FALSE)
+library(AnnotationDbi)
+library(topGO)
+```
+
+#import data
+```{r}
+#Import protein data
+tmt <- read.csv("~/Downloads/pnas.2109332118.sd09.csv", stringsAsFactors = F)
+#re-define protein column to shortened name
+tmt <- tmt[,c(1:181,183)]
+colnames(tmt)[182] <- "Protein"
+#make new column for gene accession without transcript id
+tmt$Gene <- substr(tmt$Accession, start = 1, stop = 14)
+#Remove polymorphic peptides
+#tmt.withPolymorphic <- tmt
+tmt <- tmt[-(grep("only", tmt$Accession)),]
+#Convert to numeric
+for(i in 1:170){
+  tmt[,i] <- as.numeric(tmt[,i])
+}
+
+#Subset all hybrids from 6-hybrid experiment (6H)
+tmt.6H <- tmt[,c(171:183,31:60)]
+#Remove proteins not detected in one or more samples
+tmt.6H <- na.omit(tmt.6H)
+#calculate averages
+tmt.6H$B73 <- rowMeans(tmt.6H[,c("X6Hybrid.B73.r1", "X6Hybrid.B73.r2", "X6Hybrid.B73.r3")])
+tmt.6H$Mo17 <- rowMeans(tmt.6H[,c("X6Hybrid.Mo17.r1", "X6Hybrid.Mo17.r2", "X6Hybrid.Mo17.r3")])
+tmt.6H$B73xMo17 <- rowMeans(tmt.6H[,c("X6Hybrid.B73xMo17.r1", "X6Hybrid.B73xMo17.r2", "X6Hybrid.B73xMo17.r3")])
+tmt.6H$Mo17xB73 <- rowMeans(tmt.6H[,c("X6Hybrid.Mo17xB73.r1", "X6Hybrid.Mo17xB73.r2", "X6Hybrid.Mo17xB73.r3")])
+tmt.6H$B84 <- rowMeans(tmt.6H[,c("X6Hybrid.B84.r1", "X6Hybrid.B84.r2", "X6Hybrid.B84.r3")])
+tmt.6H$B84xB73 <- rowMeans(tmt.6H[,c("X6Hybrid.B84xB73.r1", "X6Hybrid.B84xB73.r2", "X6Hybrid.B84xB73.r3")])
+tmt.6H$B84xMo17 <- rowMeans(tmt.6H[,c("X6Hybrid.B84xMo17.r1", "X6Hybrid.B84xMo17.r2", "X6Hybrid.B84xMo17.r3")])
+tmt.6H$A682 <- rowMeans(tmt.6H[,c("X6Hybrid.A682.r1", "X6Hybrid.A682.r2", "X6Hybrid.A682.r3")])
+tmt.6H$A682xB73 <- rowMeans(tmt.6H[,c("X6Hybrid.A682xB73.r1", "X6Hybrid.A682xB73.r2", "X6Hybrid.A682xB73.r3")])
+tmt.6H$A682xMo17 <- rowMeans(tmt.6H[,c("X6Hybrid.A682xMo17.r1", "X6Hybrid.A682xMo17.r2", "X6Hybrid.A682xMo17.r3")])
+#Calculate hyb/MP ratios
+tmt.6H$B73xMo17.MP <- tmt.6H$B73xMo17/rowMeans(tmt.6H[,c("B73", "Mo17")])
+tmt.6H$Mo17xB73.MP <- tmt.6H$Mo17xB73/rowMeans(tmt.6H[,c("B73", "Mo17")])
+tmt.6H$B84xB73.MP <- tmt.6H$B84xB73/rowMeans(tmt.6H[,c("B84", "B73")])
+tmt.6H$B84xMo17.MP <- tmt.6H$B84xMo17/rowMeans(tmt.6H[,c("B84", "Mo17")])
+tmt.6H$A682xB73.MP <- tmt.6H$A682xB73/rowMeans(tmt.6H[,c("A682", "B73")])
+tmt.6H$A682xMo17.MP <- tmt.6H$A682xMo17/rowMeans(tmt.6H[,c("A682", "Mo17")])
+
+#Subset all hybrids from RIL experiment (RIL)
+tmt.RIL <- tmt[,c(171:183,81:170)]
+#Remove proteins not detected in one or more samples
+tmt.RIL <- na.omit(tmt.RIL)
+#Calculate averages
+tmt.RIL$BM.B73 <- rowMeans(tmt.RIL[,c("B73.1", "B73.3", "B73.4")])
+tmt.RIL$BM.Mo17 <- rowMeans(tmt.RIL[,c("Mo17.1", "Mo17.3", "Mo17.4")])
+tmt.RIL$BM.BM <- rowMeans(tmt.RIL[,c("BM.1", "BM.2", "BM.3", "BM.4")])
+tmt.RIL$M0014.B73 <- rowMeans(tmt.RIL[,c("B73.1.1", "B73.2", "B73.3.1", "B73.4.1")])
+tmt.RIL$M0014.Mo17<- rowMeans(tmt.RIL[,c("Mo17.1.1", "Mo17.2", "Mo17.3.1", "Mo17.4.1")])
+tmt.RIL$M0014.14 <- rowMeans(tmt.RIL[,c("X14.1", "X14.2", "X14.3", "X14.4")])
+tmt.RIL$M0014.14B <- rowMeans(tmt.RIL[,c("X14B.1", "X14B.2", "X14B.3", "X14B.4")])
+tmt.RIL$M0014.14M <- rowMeans(tmt.RIL[,c("X14M.1", "X14M.2", "X14M.3", "X14M.4")])
+tmt.RIL$M0016.B73 <- rowMeans(tmt.RIL[,c("B73.1.2", "B73.2.1", "B73.3.2", "B73.4.2")])
+tmt.RIL$M0016.Mo17<- rowMeans(tmt.RIL[,c("Mo17.1.2", "Mo17.2.1", "Mo17.3.2", "Mo17.4.2")])
+tmt.RIL$M0016.16 <- rowMeans(tmt.RIL[,c("X16.1", "X16.2", "X16.3", "X16.4")])
+tmt.RIL$M0016.16B <- rowMeans(tmt.RIL[,c("X16B.1", "X16B.2", "X16B.3", "X16B.4")])
+tmt.RIL$M0016.16M <- rowMeans(tmt.RIL[,c("X16M.1", "X16M.2", "X16M.3", "X16M.4")])
+tmt.RIL$M0021.B73 <- rowMeans(tmt.RIL[,c("B73.1.3", "B73.2.2", "B73.3.3", "B73.4.3")])
+tmt.RIL$M0021.Mo17<- rowMeans(tmt.RIL[,c("Mo17.1.3", "Mo17.2.2", "Mo17.3.3", "Mo17.4.3")])
+tmt.RIL$M0021.21 <- rowMeans(tmt.RIL[,c("X21.1", "X21.2", "X21.3", "X21.4")])
+tmt.RIL$M0021.21B <- rowMeans(tmt.RIL[,c("X21B.1", "X21B.2", "X21B.3", "X21B.4")])
+tmt.RIL$M0021.21M <- rowMeans(tmt.RIL[,c("X21M.1", "X21M.2", "X21M.3", "X21M.4")])
+tmt.RIL$M0317.B73 <- rowMeans(tmt.RIL[,c("B73.1.4", "B73.2.3", "B73.3.4", "B73.4.4")])
+tmt.RIL$M0317.Mo17<- rowMeans(tmt.RIL[,c("Mo17.1.4", "Mo17.2.3", "Mo17.3.4", "Mo17.4.4")])
+tmt.RIL$M0317.317 <- rowMeans(tmt.RIL[,c("X317.1", "X317.2", "X317.3", "X317.4")])
+tmt.RIL$M0317.317B <- rowMeans(tmt.RIL[,c("X317B.1", "X317B.2", "X317B.3", "X317B.4")])
+tmt.RIL$M0317.317M <- rowMeans(tmt.RIL[,c("X317M.1", "X317M.2", "X317M.3", "X317M.4")])
+#Calculate hyb/mp ratios
+tmt.RIL$BM.BM.MP <- tmt.RIL$BM.BM/rowMeans(tmt.RIL[,c("BM.B73", "BM.Mo17")], na.rm = T)
+tmt.RIL$M0014.14B.MP <- tmt.RIL$M0014.14B/rowMeans(tmt.RIL[,c("M0014.14", "M0014.B73")], na.rm = T)
+tmt.RIL$M0014.14M.MP <- tmt.RIL$M0014.14M/rowMeans(tmt.RIL[,c("M0014.14", "M0014.Mo17")], na.rm = T)
+tmt.RIL$M0016.16B.MP <- tmt.RIL$M0016.16B/rowMeans(tmt.RIL[,c("M0016.16", "M0016.B73")], na.rm = T)
+tmt.RIL$M0016.16M.MP <- tmt.RIL$M0016.16M/rowMeans(tmt.RIL[,c("M0016.16", "M0016.Mo17")], na.rm = T)
+tmt.RIL$M0021.21B.MP <- tmt.RIL$M0021.21B/rowMeans(tmt.RIL[,c("M0021.21", "M0021.B73")], na.rm = T)
+tmt.RIL$M0021.21M.MP <- tmt.RIL$M0021.21M/rowMeans(tmt.RIL[,c("M0021.21", "M0021.Mo17")], na.rm = T)
+tmt.RIL$M0317.317B.MP <- tmt.RIL$M0317.317B/rowMeans(tmt.RIL[,c("M0317.317", "M0317.B73")], na.rm = T)
+tmt.RIL$M0317.317M.MP <- tmt.RIL$M0317.317M/rowMeans(tmt.RIL[,c("M0317.317", "M0317.Mo17")], na.rm = T)
+
+tmt.all <- merge.data.frame(tmt.6H[,c(6,54:59)], tmt.RIL[,c(6,127:135)], by.x = "Accession", by.y = "Accession")
+write.csv(tmt.all, "tmt.all_03142022.csv",row.names = F)
+
+df_exp <- read.csv("tmt.all_03142022.csv")
+df_exp <- sapply(df_exp[,2:16],as.numeric)
+df_exp <- t(df_exp)
+names_protein <- df_exp[,1]
+rownames(df_exp) <- hyb_traits$X
+colnames(df_exp) <- names_protein
+df_exp <- df_exp[-1,]
+tmt.all <- read.csv("tmt.all_03142022.csv")
+
+write.csv(df_exp, "Protein_WGCNA_031422.csv",row.names = F)
+```
+
+#seedling leaf tmt
+```{r}
+#BxM from Original Experiment (OG)
+tmt.SL <- tmt[,c(171:183,12:20)]
+#Remove proteins not detected in one or more samples
+tmt.SL <- na.omit(tmt.SL)
+#Calculate averages of bio reps
+tmt.SL$B73 <- rowMeans(tmt.SL[,c("SeedlingLeaf.B73.r1", "SeedlingLeaf.B73.r2", "SeedlingLeaf.B73.r3")])
+tmt.SL$Mo17 <- rowMeans(tmt.SL[,c("SeedlingLeaf.Mo17.r1", "SeedlingLeaf.Mo17.r2", "SeedlingLeaf.Mo17.r3")])
+tmt.SL$B73xMo17 <- rowMeans(tmt.SL[,c("SeedlingLeaf.BM.r1", "SeedlingLeaf.BM.r2", "SeedlingLeaf.BM.r3")])
+tmt.SL$MP <- rowMeans(tmt.SL[,c("B73", "Mo17")])
+#calculate ratios
+tmt.SL$B73xMo17.MP <- tmt.SL$B73xMo17/tmt.SL$MP
+tmt.SL$l2.B73xMo17.MP <- log2(tmt.SL$B73xMo17.MP)
+tmt.SL$B73.Mo17 <- tmt.SL$B73/tmt.SL$Mo17
+tmt.SL$l2.B73.Mo17 <-log2(tmt.SL$B73.Mo17)
+#Calculate hyb/MP significance
+tmt.SL$MP1 <- rowMeans(tmt.SL[,c("SeedlingLeaf.B73.r1","SeedlingLeaf.Mo17.r1")])
+tmt.SL$MP2 <- rowMeans(tmt.SL[,c("SeedlingLeaf.B73.r2","SeedlingLeaf.Mo17.r2")])
+tmt.SL$MP3 <- rowMeans(tmt.SL[,c("SeedlingLeaf.B73.r3","SeedlingLeaf.Mo17.r3")])
+tmt.SL$ttest.MP <- ttestFun(tmt.SL, c("SeedlingLeaf.BM.r1", "SeedlingLeaf.BM.r2", "SeedlingLeaf.BM.r3"), c("MP1", "MP2", "MP3"))
+tmt.SL$l10.ttest.MP <- -(log10(tmt.SL$ttest.MP))
+tmt.SL_plot <- tmt.SL[,c("Accession","Gene","Protein","l2.B73xMo17.MP","l10.ttest.MP")]
+tmt.SL_plot <- merge.data.frame(tmt.SL_plot, SL_GOIs[,c("Accession","Category")], by.x = "Accession",by.y = "Accession", all.x = T)
+tmt.SL_plot <- merge.data.frame(tmt.SL_plot, candidate_gene[,c("Gene","Pathway.Category","")])
+```
+
+#clustering samples
+```{r}
+#dist_protein <- dist(df_exp)
+#df_sample <- data.frame(t(df_exp))
+#dist_sample <- dist(df_sample)
+#hc <- hclust(dist_sample, method = "average")
+#hc_phylo <- as.phylo(hc)
+#Wplot(hc_phylo)
+```
+
+```{r}
+traits <- read.csv("hybrid_scale_trait.csv", header = TRUE, stringsAsFactors = FALSE)
+rownames(traits) <- traits$sample
+#traits <- traits[,-1]
+t1 <- ggplot(traits, aes(plant.height, avg.g.kernel), color = traits$sample)+geom_text(aes(label = traits$sample), color = "dodgerblue4", size = 3.5)
+t1
+t1 +annotate("text", x = 0.92, y = 0.14, label = "pearson correlation = 0.547", color = "tomato3", size = 4)
+
+```
+#traits correlation
+```{r}
+hyb_traits <- read.csv("HMP_traits.csv", header = TRUE, stringsAsFactors = FALSE)
+hyb_traits <- hyb_traits[1:15,c(1,6,5)]
+hyb_traits[2,1] <- "MB"
+rownames(hyb_traits) <- hyb_traits$sample
+hyb_traits <- hyb_traits[,-1]
+#cor(traits$avg.g.kernel,traits$plant.height, method = "pearson")
+
+barplot(hyb_traits$plant.height,space = 0)
+```
+
+
+#trait cmd
+```{r}
+traits_input <- hyb_traits[, -1]
+dist_traits <- dist(traits_input)
+hc_traits <- hclust(dist_traits)
+plot(as.phylo(hc_traits))
+
+#mds
+fit_traits <- cmdscale(dist_traits, eig = TRUE, x.ret = TRUE, k = 2)
+mds_var_traits<- round(fit_traits$eig/sum(fit_traits$eig)*100, 1)
+mds_var_traits
+
+fit_traits <- as.data.frame(fit_traits$points)
+p_traits <- ggplot(fit_traits, aes(fit_traits$V1, fit_traits$V2, label = rownames(fit_traits))) +geom_text(aes(label = rownames(fit_traits)), color = "salmon") +
+   xlab(paste("MDS1 - ", mds_var_traits[1], "%", sep = "")) +
+  ylab(paste("MDS2 - ", mds_var_traits[2], "%", sep = ""))
+#ggsave(plot=p1, filename = "mds_expression.tiff",
+           #device="tiff", dpi=200, width=6, height=4.5, compression = "lzw") 
+
+p_traits
+```
+
+
+#multiple dimensional scaling
+```{r}
+fit_exp <- cmdscale(dist_sample, eig = TRUE, x.ret = TRUE, k = 2)
+mds_var_exp<- round(fit_exp$eig/sum(fit_exp$eig)*100, 1)
+mds_var_exp
+
+fit_exp <- as.data.frame(fit_exp$points)
+p1 <- ggplot(fit_exp, aes(fit_exp$V1, fit_exp$V2, label = rownames(fit_exp))) +
+  geom_text(aes(label = rownames(fit_exp)), color = "salmon") +
+   xlab(paste("MDS1 - ", mds_var_exp[1], "%", sep = "")) +
+  ylab(paste("MDS2 - ", mds_var_exp[2], "%", sep = ""))
+
+ggsave(plot=p1, filename = "mds_expression.tiff",
+           device="tiff", dpi=200, width=6, height=4.5, compression = "lzw") 
+
+p1
+```
+
+
+#pick soft-thresholding powers
+```{r}
+WGCNA_plot1=function(df_exp){
+    # Choose a set of soft-thresholding powers
+    powers = c(4:25)
+    # Call the network topology analysis function
+    sft = WGCNA::pickSoftThreshold(df_exp, powerVector = powers, networkType = "signed", verbose = 5, corFnc = "cor", corOptions = list(use = 'p', method = 'spearman'))
+
+    #plot
+    require(repr)
+    tiff('betaprotein_signed_spearman_072623.tiff', units = "in", width = 8, height = 6, res = 300, compression = "lzw")
+    options(repr.plot.width=9, repr.plot.height=4)
+    par(mfrow = c(1,2));
+    cex1 = 0.9;
+    plot(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+    xlab="Soft Threshold (power)",ylab="Scale Free Topology Model Fit,signed R^2",type="n",
+    main = paste("Scale independence"));
+    text(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+    labels=powers,cex=cex1,col="red");
+    # this line corresponds to using an R^2 cut-off of h
+    abline(h=0.9,col="red")
+    # Mean connectivity as a function of the soft-thresholding power
+    plot(sft$fitIndices[,1], sft$fitIndices[,5],
+    xlab="Soft Threshold (power)",ylab="Mean Connectivity", type="n",
+    main = paste("Mean connectivity"))
+    text(sft$fitIndices[,1], sft$fitIndices[,5], labels=powers, cex=cex1,col="red")
+    dev.off()
+}
+
+WGCNA_plot1(df_exp)
+```
+
+
+#plot soft connectivity
+```{r}
+WGCNA_plot2=function(datExpr,softPower){
+    k=WGCNA::softConnectivity(datExpr,power=softPower)
+    # Plot a histogram of k and a scale free topology plot
+    par(mfrow = c(1,2));
+    hist(k)
+    WGCNA::scaleFreePlot(k, main="Check scale free topology\n")
+}
+
+WGCNA_plot2(df_sample, 18)
+```
+
+####generate network and module
+
+#calculate adjacency 
+```{r}
+#softPower_protein = 16
+adjacency_protein <- WGCNA::adjacency(df_exp, power = 18, type = "signed", corFnc = "bicor")
+
+adjacency_protein_pearson <- WGCNA::adjacency(df_exp, power = 18, type = "signed")
+
+
+adjacency = WGCNA::adjacency(df_exp, power=10, type="signed", corOptions=list(maxPOutliers=0.1))
+
+adjacency_spearman = WGCNA::adjacency(df_exp, power=18, type="signed", corOptions=list(use = 'p', method = 'spearman'))
+
+#turn adjacency into topological overlap
+dissTOM_protein <-  TOMdist(adjacency_spearman, )
+TOM
+```
+
+#clustering using TOM & colors to labels
+```{r}
+# hierarchical clustering
+geneTree = hclust(as.dist(dissTOM_protein), method = "average")
+# here we define the modules by cutting branches
+unmergedLabels= cutreeDynamic(dendro = geneTree, distM = dissTOM_protein,
+    deepSplit = 2, pamRespectsDendro = F, minClusterSize = 30)
+
+unmergedColors = labels2colors(unmergedLabels)
+```
+
+#plotdendrocolors
+```{r}
+
+#Plot the dendrogram and colors underneath
+sizeGrWindow(8,6)
+plotDendroAndColors(geneTree, moduleColors, "Dynamic Tree Cut",
+                  dendroLabels = FALSE, hang = 0.03,
+                  addGuide = TRUE, guideHang = 0.05,
+                  main = "Gene dendrogram and module colors")
+```
+#merge modules based on similar expression profiles
+```{r}
+# Calculate eigengenes
+
+#unmergedMEs <- moduleEigengenes(df_exp, colors = unmergedColors)$eigengenes
+
+merge = mergeCloseModules(df_exp, unmergedLabels, cutHeight = 0.25)
+
+moduleLabels = merge$colors
+
+moduleColors = labels2colors(moduleLabels)
+
+# Recalculate MEs with color labels
+MEs = moduleEigengenes(df_exp, moduleColors)$eigengenes
+
+MEs = orderMEs(MEs)
+
+#write.csv(MEs_protein, "Protein_MEs_03142022.csv",row.names = F)
+```
+
+#MET heatmap
+```{r}
+#add traits to existing eigengenes
+MET = orderMEs(MEs)
+names(MET)[7] <- "plant height"
+
+MET <- MET[,c("MEturquoise","MEred","MEyellow","plant height","MEbrown","MEgreen")]
+
+plotEigengeneNetworks(MET, "Eigengene Heatmap", marHeatmap = c(5,5,2,2),plotAdjacency = F,printAdjacency = F,plotDendrograms = F,xLabelsAngle = 90,cex.lab = 0.8)
+                      
+textMatrix = paste(signif(moduleTraitCor, 2), "\n(",
+                        signif(moduleTraitPvalue, 1), ")", sep = "")  
+
+met_matrix <- cor(MET,MET)
+
+par(mar = c(6, 7, 2, 1))
+#par(col = "white","black")
+labeledHeatmap(met_matrix,xLabels = c("MEturquoise","MEred","MEyellow","plant height","MEbrown","MEgreen"),yLabels = c("MEturquoise","MEred","MEyellow","plant height","MEbrown","MEgreen"),colorLabels = FALSE,
+             colors = viridis(30,alpha = 0.8,begin = 0.4,end = 1),
+             textMatrix = textMatrix,
+             setStdMargins = FALSE,
+             cex.text = 1,
+             ySymbols = c("404","214","295","","314","246"),xSymbols =c("404","214","295","","314","246"))
+```
+
+
+#quantifying module-trait association
+```{r}
+# Define numbers of genes and samples
+#nGenes = ncol(df_exp)
+#nSamples = nrow(df_exp)
+
+moduleTraitCor_protein = data.frame(cor(MEs,hyb_traits$height,use = "p"))
+moduleTraitCor_protein$module <- rownames(moduleTraitCor_protein)
+colnames(moduleTraitCor_protein)[1] <- "Cor"
+moduleTraitCor_protein <- moduleTraitCor_protein[order(moduleTraitCor_protein$Cor,decreasing = T),]
+moduleTraitCor_protein$pvalue <- corPvalueStudent(moduleTraitCor_protein$Cor, nSamples)
+moduleTraitCor_protein$pvalue_corrected <- p.adjust(moduleTraitCor_protein$pvalue, method = "BH")
+moduleTraitCor_protein$number <- 1:nrow(moduleTraitCor_protein)
+#write.csv(moduleTraitCor_protein, "Protein_moduleTrait_03142022.csv",row.names = F)
+
+moduleTraitCor_protein_num <- as.matrix(moduleTraitCor_protein$Cor)
+
+textMatrix = paste(signif(moduleTraitCor_protein$Cor, 2), "(",
+                        signif(moduleTraitCor_protein$pvalue_corrected, 2), ")", sep = "")
+
+par(mar = c(3, 10, 4, 15))
+#tiff(filename='Protein_WGCNA_MT.tiff', width = 1200, height = 800)
+# Display the correlation values within a heatmap plot
+labeledHeatmap(moduleTraitCor_protein_num,
+            xLabels = NA,
+            yLabels = 1:21,
+           ySymbols = 1:21,
+            colorLabels = F,
+             colors = blueWhiteRed(50),
+             textMatrix = textMatrix,
+             setStdMargins = F,
+             cex.text = 0.6,
+            zlim = c(-1,1),cex.lab = 0.8)
+
+```
+#module-trait heatmap
+```{r}
+sizeGrWindow(12,6)
+# Will display correlations and their p-values
+textMatrix = paste(signif(moduleTraitCor, 2), "\n(",
+                        signif(moduleTraitPvalue, 1), ")", sep = "")
+dim(textMatrix) = dim(moduleTraitCor)
+par(mar = c(7, 13, 3, 3))
+# Display the correlation values within a heatmap plot
+labeledHeatmap(moduleTraitCor,
+            xLabels = colnames(moduleTraitCor),
+             yLabels = names(MEs),
+           ySymbols = names(MEs),
+            colorLabels = F,
+             colors = blueWhiteRed(50),
+             textMatrix = textMatrix,
+             setStdMargins = FALSE,
+             cex.text = 0.5, 
+            zlim = c(-1,1),
+             main = paste("Module-trait relationships"))
+head(textMatrix)
+
+heatmap.2(moduleTraitCor)
+```
+
+#order module trait cor
+```{r}
+moduleTraitCor[order(abs(moduleTraitCor[,1]),decreasing = TRUE), ]
+moduleTrait <- data.frame(moduleTraitCor[,1])
+colnames(moduleTrait) <- "plant.height"
+moduleTrait$category <- "other"
+moduleTrait <- moduleTrait[order(moduleTrait$p_value, decreasing = FALSE), ]
+moduleTrait$p_value <- moduleTraitPvalue[,1]
+p.adjust(moduleTraitPvalue[,1],method = "BH")
+```
+
+# calculate the module membership values (aka. module eigengene based connectivity kME):
+```{r}
+datKME_protein = signedKME(df_exp, MEs)
+modNames_protein = substring(names(datKME_protein), 4)
+G.S_height_protein = as.numeric(cor(df_exp, hyb_traits$height, use = "p"))
+#G.S_height_old = as.numeric(cor(cpm_all_t, hyb_traits$height, use = "p"))
+G.S_height_pvalue_protein <- corPvalueStudent(G.S_height_protein, nSamples)
+
+
+
+
+
+selectModules = c("turquoise","brown", "purple", "darkorange")
+
+par(mfrow = c(2, 2))
+for (module in selectModules) {
+    column = match(module, modNames_protein)
+    restModule = moduleColors == module
+    verboseScatterplot(datKME_protein[restModule, column], G.S_height_protein[restModule], xlab = paste("Module Membership ", 
+        module, "module"), ylab = "GS.plant.height", main = paste("kME.", module, 
+        "vs. GS"), col = module,cex.lab = 1,cex.main = 0.8,cex.axis = 1)
+}
+
+
+```
+
+
+#intramodular analysis:identify genes with high GS and MM
+```{r}
+selectModule = unique(moduleColors)
+
+#sizeGrWindow(10,10)
+par(mfrow = c(1,1))
+
+par(mfrow = c(2, length(selectModules)/2))
+for (module in selectModules) {
+  column = match(module, modNames)
+  moduleGenes = moduleColors==module
+verboseScatterplot(geneModuleMembership[moduleGenes, column],
+                   geneTraitSignificance[moduleGenes],
+                 xlab = paste("Module Membership in", module, "module"),
+                 ylab = "GS_plant height",
+                 main = paste("Module Membership vs. Gene Significance\n"),
+                 cex.main = 1, cex.lab = 1, cex.axis = 0.8, col = module)
+}
+
+all_MMGS <- data.frame()
+for (module in selectModules) {
+  column = match(module, modNames)
+  moduleGenes = moduleColors==module
+  cor_MMGS = cor(geneModuleMembership[moduleGenes, column], geneTraitSignificance[moduleGenes])
+  p_MMGS = corPvalueStudent(cor_MMGS,length(geneModuleMembership[moduleGenes, column]))
+  bind_MMGS = cbind(cor_MMGS,p_MMGS)
+  all_MMGS <- rbind(all_MMGS,bind_MMGS)
+}
+
+rownames(all_MMGS) <- selectModule
+```
+#write to gene info file
+```{r}
+#NAMES <- names(df_sample)[moduleColors=="palevioletred3"]
+#df[df$Accession %in% NAMES, "NAME"]
+#df_WGCNA$Accession <- substr(df_WGCNA$Accession, start = 1, stop = 14)
+#test <- data.frame(test)
+
+
+
+#datGS.Traits = data.frame(cor(df_exp, hyb_traits$plant.height, use = "p"))
+#colnames(datGS.Traits) <- "geneTraitSignificance"
+datOutput= data.frame(Accession = colnames(df_exp), moduleColors, datKME_protein, G.S_height_protein, G.S_height_pvalue_protein)
+datOutput <- merge.data.frame(datOutput, protein_all_genotype[,c("Accession","Protein")], by.x = "Accession",all.x = T)
+datOutput <- merge.data.frame(datOutput, SL_GOIs[,c("Accession","Category")], by.x = "Accession",all.x = T)
+datOutput$Gene <- substr(datOutput$Accession, start = 1, stop = 14)
+
+
+datOutput <- merge.data.frame(datOutput, complex[,c("Gene","complex_label")], by.x = "Gene",by.y = "Gene",all.x = T)
+datOutput_protein <- merge.data.frame(datOutput_protein, candidate_gene[,c(1:2,4:6)], by.x = "Gene",by.y = "Gene",all.x = T)
+datOutput_protein <- datOutput_protein[-which(duplicated(datOutput_protein$Accession)),]
+
+write.csv(datOutput_protein,file = "protein_WGCNA_25signed_03142022.csv",row.names = F)
+df_cytoscape <- exportNetworkToCytoscape(adjacency_HMP_tissue,weighted = TRUE,nodeAttr = moduleColors)
+df_visant <- exportNetworkToVisANT(adjacency,weighted = TRUE)
+
+write.csv(df_cytoscape$edgeData,"cytoscape_edge_input.csv")
+write.csv(df_cytoscape$nodeData,"cytoscape_node_input.csv")
+
+#geneInfo = data.frame(Accession = probes,protein = df_WGCNA$NAME,moduleColor = moduleColors, datKME, datGS.Traits)
+
+#datOutput[datOutput$moduleColors == "yellow", ]
+protein_WGCNA <- read.csv("~/Downloads/protein_WGCNA_summary.csv", header = T, stringsAsFactors = F)
+protein_WGCNA <- merge.data.frame(protein_WGCNA, complex_v4[,2:3],by.x = "gene",by.y = "v4_gene_model", all.x = T)
+```
+
+
+
+#readin SL_GOI
+```{r}
+SL_GOI <- read.csv(file = "~/Desktop/rotation_Briggs/FinalLeafGOIs.csv", header = TRUE, stringsAsFactors = FALSE)
+table(SL_GOI$Category)
+leaf_summary_GOI <- merge.data.frame(datOutput,SL_GOI[,c("Accession","Category")], by.x = "ProbeID",by.y = "Accession",all = F)
+leaf_summary_GOI <- leaf_summary_GOI[,-(3:30)]
+module_composition_stats <- data.frame(table(leaf_summary_GOI$Category))
+yellow <- leaf_summary_GOI[leaf_summary_GOI$moduleColors == "yellow",]
+yellow_freq <- data.frame(table(yellow$Category))
+```
+
+#merge module and GO function 
+```{r}
+merge_module_GO <- function(a,b){
+  df_1 <- datOutput[datOutput$moduleColors == a, c("ProbeID","moduleColors","geneTraitSignificance",b)]
+  df_2 <- merge.data.frame(x = df_1, y = SL_GOI[, c("Accession","Protein","Category","GOterm","KeggPathway")], by.x = "ProbeID", by.y  = "Accession")  
+  df_2 <- unique(df_2)
+  df_2 <- df_2[order(df_2[,b],decreasing = TRUE), ]
+  df_2$Gene <- substr(df_2$ProbeID, start = 1, stop = 14)
+  df_2 <- df_2[!(abs(df_2[,b]) <= 0.7), ]
+  df_2 <- df_2[!(abs(df_2[,3]) <= 0.5), ]
+  df_2 <- df_2[-(grep("only",df_2[,"ProbeID"])), ]
+  colnames(df_2)[4] <- "module membership"
+  df_2
+}
+```
+
+
+
+#separate top modules 
+```{r}
+Protein_module_1 <- datOutput[datOutput$moduleColors == "turquoise",c("Accession","Protein","moduleColors","kMEturquoise","Category","G.S_height_protein","G.S_height_pvalue_protein","complex_label")]
+Protein_module_1 <- Protein_module_1[-which(Protein_module_1$kMEturquoise <= 0.4),]
+
+Protein_module_2 <- datOutput[datOutput$moduleColors == "brown",c("Accession","Protein","moduleColors","kMEbrown","Category","G.S_height_protein","G.S_height_pvalue_protein", "complex_label")]
+Protein_module_2 <- Protein_module_2[-which(Protein_module_23$kMEbrown <= 0.4),]
+
+Protein_module_34 <- datOutput[datOutput$moduleColors == "darkorange",c("Accession","Protein","moduleColors","kMEdarkorange","Category","G.S_height_protein","G.S_height_pvalue_protein", "complex_label")]
+Protein_module_34 <- Protein_module_34[-which(Protein_module_34$kMEdarkorange <= 0.4),]
+
+Protein_module_33 <- datOutput[datOutput$moduleColors == "purple",c("Accession","Protein","moduleColors","kMEpurple","Category","G.S_height_protein","G.S_height_pvalue_protein", "complex_label")]
+Protein_module_33 <- Protein_module_33[-which(Protein_module_33$kMEpurple <= 0.4),]
+
+Protein_module_32 <- datOutput[datOutput$moduleColors== "black",c("Accession","Protein","moduleColors","kMEblack","Category","G.S_height_protein","G.S_height_pvalue_protein","complex_label")]
+Protein_module_32 <- Protein_module_32[-which(Protein_module_32$kMEblack <= 0.4),]
+
+Protein_module_1_selected <- Protein_module_1[which(Protein_module_1$G.S_height_protein > 0.6),]
+Protein_module_1_selected <- Protein_module_1_selected[which(Protein_module_1_selected$kMEblue > 0.7),]
+Protein_module_1_selected$plastid_function <- plastid_localized_2[match(Protein_module_1_selected$Gene, plastid_localized_2$v4),"row"]
+Protein_module_1_selected <- merge.data.frame(Protein_module_1_selected,Chloroplast_protein[,c("v4_gene_model","Protein_1","Function")], by.x = "Gene", by.y = "v4_gene_model", all.x = T)
+```
+
+#reassign genes within selected modules
+```{r}
+datOutput_protein_reassigned <- datOutput_protein
+M1_M2 <- Protein_module_1[which(Protein_module_1$kMEdarkgrey > Protein_module_1$kMEblue),"Accession"]
+datOutput_protein_reassigned[datOutput_protein_reassigned$Accession %in% M1_M2,"moduleColors_protein"] <- "darkgrey"
+M1_M3 <- M1_M2 <- Protein_module_1[which(Protein_module_1$kMEred > Protein_module_1$kMEblue),"Accession"]
+datOutput_protein_reassigned[datOutput_protein_reassigned$Accession %in% M1_M3,"moduleColors_protein"] <- "red"
+
+M3_M1 <- Protein_module_3[which(Protein_module_3$kMEblue > Protein_module_3$kMEred),"Accession"]
+datOutput_protein_reassigned[datOutput_protein_reassigned$Accession %in% M3_M1,"moduleColors_protein"] <- "blue"
+M3_M2 <- Protein_module_3[which(Protein_module_3$kMEdarkgrey > Protein_module_3$kMEred),"Accession"]
+Protein_module_3[Protein_module_3$Accession %in% M3_M2,5:7]
+datOutput_protein_reassigned[datOutput_protein_reassigned$Accession %in% M3_M2,"moduleColors_protein"] <- "darkgrey"
+M1_L_M2 <- Protein_module_3[which(Protein_module_3$kMEblue > Protein_module_3$kMEdarkgrey),"Accession"]
+M3_M2 <- M3_M2[-which(M3_M2 %in% M1_L_M2)]
+
+M21_M22 <- Protein_module_21[which(Protein_module_21$kMEyellow > Protein_module_21$kMEgreenyellow),"Accession"]
+datOutput_protein_reassigned[datOutput_protein_reassigned$Accession %in% M21_M22,"moduleColors_protein"] <- "yellow"
+M21_M23 <- Protein_module_21[which(Protein_module_21$kMEcyan > Protein_module_21$kMEgreenyellow),"Accession"]
+datOutput_protein_reassigned[datOutput_protein_reassigned$Accession %in% M21_M23,"moduleColors_protein"] <- "cyan"
+M22_L_M23 <- Protein_module_21[which(Protein_module_21$kMEyellow > Protein_module_21$kMEcyan),"Accession"]
+M21_M23 <- M21_M23[-which(M21_M23 %in% M22_L_M23)]
+
+M22_M21 <- Protein_module_22[which(Protein_module_22$kMEgreenyellow > Protein_module_22$kMEyellow),"Accession"]
+datOutput_protein_reassigned[datOutput_protein_reassigned$Accession %in% M22_M21,"moduleColors_protein"] <- "greenyellow"
+M22_M23 <- Protein_module_22[which(Protein_module_22$kMEcyan> Protein_module_22$kMEyellow),"Accession"]
+datOutput_protein_reassigned[datOutput_protein_reassigned$Accession %in% M22_M23,"moduleColors_protein"] <- "cyan"
+M21_L_M23 <- Protein_module_22[which(Protein_module_22$kMEgreenyellow > Protein_module_22$kMEcyan),"Accession"]
+M22_M23 <- M22_M23[-which(M22_M23 %in% M21_L_M23)]
+
+M23_M21 <- Protein_module_23[which(Protein_module_23$kMEgreenyellow > Protein_module_23$kMEcyan),"Accession"]
+datOutput_protein_reassigned[datOutput_protein_reassigned$Accession %in% M23_M21,"moduleColors_protein"] <- "greenyellow"
+M23_M22 <- Protein_module_23[which(Protein_module_23$kMEyellow > Protein_module_23$kMEcyan),"Accession"]
+datOutput_protein_reassigned[datOutput_protein_reassigned$Accession %in% M23_M22,"moduleColors_protein"] <- "yellow"
+M21_L_M22 <- Protein_module_23[which(Protein_module_23$kMEgreenyellow > Protein_module_23$kMEyellow),"Accession"]
+M23_M22 <- M23_M22[-which(M23_M22 %in% M21_L_M22)]
+
+write.csv(datOutput_protein_reassigned, "Protein_WGCNA_25_reassigned.csv",row.names = F)
+```
+
+#make summary file
+```{r}
+table(yellow$Category)
+
+
+
+moduleTrait[10,"category"] <-  "18 NE.PSII, 11 NE.PSI, 10 NE.OxPhos, 8 NE.CalvinCycle, 6 NE.NDH, 4 NE.ATPase, 3 Pt.NADH, 3 Pt.PSI, 2 Pt.PSII, 2 Pt.ATP, 2 Pt.b6f, 2 Pt.PSII, 2 NE.Rubisco, 2 NE.ETC, 1 Pt.Rubisco, 1 PlastidRibo "
+#moduleTrait$n.Protein <- "0"
+#moduleTrait$plastid <- "0"
+#moduleTrait$Mitochondria <- "0"
+
+moduleTrait[10,"n.Protein"] <- nrow(blue)
+moduleTrait[10,"plastid"] <- length(grep("TRUE",blue$Plastid..Friso.et.al.2010.))
+moduleTrait[10,"Mitochondria"] <- length(grep("TRUE",blue$Mitochondria..Wang.et.al.2018.))
+
+
+#moduleTrait$avg.category.geneTraitsignificance <- "0"
+#moduleTrait$avg.category.moduleMembership <- "0"
+#moduleTrait$topGo_BP <- "0"
+#moduleTrait$topGo_CC <- "0"
+
+#mean(abs(black[black$Category != "other", "geneTraitSignificance"]))
+moduleTrait[10,"avg.category.geneTraitsignificance"] <- mean(abs(blue[blue$Category != "other", "geneTraitSignificance"]))
+moduleTrait[10,"avg.category.moduleMembership"] <- mean(abs(blue[blue$Category != "other", "kMEblue"]))
+moduleTrait[10,"topGo_BP"] <- blue_bp_stats[1,2]
+moduleTrait[10,"topGo_CC"] <- blue_cc_stats[1,2]
+
+moduleTrait <- moduleTrait[order(abs(moduleTrait$plant.height), decreasing = TRUE), ]
+
+write.csv(moduleTrait, file = "moduleTrait_summary.csv")
+```
+
+#load gamer
+```{r}
+GAMER <- read.delim("~/Desktop/Lab/maize.B73.AGPv4.aggregate.gaf", sep = "\t", header = FALSE, stringsAsFactors = F)
+colnames(GAMER) <- c("db", "db_object_id", "db_object_symbol", "qualifier", "term_accession", "db_reference", "evidence_code", "with", "aspect", "db_object_name", "db_object_synonym", "db_object_type", "taxon", "date", "assigned_by", "annotation_extension", "gene_product_form_id")
+gamer <- data.frame(GAMER[-(1:2),])
+gamer$Term <- Term(as.character(gamer[,"term_accession"]))
+gamercut <- gamer[gamer$db_object_id %in% redox_ox$Gene,]
+```
+#GO function
+```{r}
+GOanalysisGodata <- function(EnrichedDF, GamerCut, ont, nodesize = 1){
+  gene2GO_TissueCut <- split((as.character(GamerCut$term_accession)),GamerCut$db_object_id)
+  gene2GOb_TissueCut <- gene2GO_TissueCut[-2]
+  str(head(gene2GOb_TissueCut))
+  geneNames_tissuecut <- names(gene2GOb_TissueCut)
+  myInterestingGenes <- EnrichedDF$Gene
+  geneList <- factor(as.integer(geneNames_tissuecut %in% myInterestingGenes))
+  names(geneList) <- geneNames_tissuecut
+  GOdata <- new("topGOdata", ontology = ont, allGenes = geneList, annot = annFUN.gene2GO, nodeSize=nodesize, gene2GO = gene2GOb_TissueCut)
+  GOdata
+}
+
+
+```
+
+
+#GO term enrichment 
+```{r}
+Protein_1_GO <- merge_module_GO(a = Protein_module_1, b = gamercut, ont = ont)
+Protein_1_GO$module <- "Protein module 1"
+Protein_2_GO <- merge_module_GO(a = Protein_module_2, b = gamercut, ont = ont)
+Protein_2_GO$module <- "Protein module 2"
+Protein_3_GO <- merge_module_GO(a = Protein_module_3, b = gamercut, ont = ont)
+Protein_3_GO$module <- "Protein module 3"
+Protein_positive_GO <- rbind(Protein_1_GO,Protein_2_GO,Protein_3_GO)
+write.csv(Protein_positive_GO,"Protein_WGCNA_positive_GO_031722.csv", row.names = F)
+
+Protein_21_GO <- merge_module_GO(a = Protein_module_21, b = gamercut, ont = ont)
+Protein_21_GO$module <- "Protein module 21"
+Protein_22_GO <- merge_module_GO(a = Protein_module_22, b = gamercut, ont = ont)
+Protein_22_GO$module <- "Protein module 22"
+Protein_23_GO <- merge_module_GO(a = Protein_module_23, b = gamercut, ont = ont)
+Protein_23_GO$module <- "Protein module 23"
+Protein_negative_GO <- rbind(Protein_21_GO, Protein_22_GO,Protein_23_GO)
+write.csv(Protein_negative_GO, "Protein_WGCNA_negative_GO_031722.csv",row.names = F)
+
+intersect(Protein_module_1$Gene, RNA_module_1$Gene)
+Protein_module_1_selected[Protein_module_1_selected$Gene %in% RNA_module_1_selected$Gene,]
+```
+
+#module preservation 
+```{r}
+
+setLabels = c("reference", "testset")
+multiExpr = list(reference = list(data = ), testset = list(data = df_exp))
+multiColor = list(reference = moduleColors)
+```
+
+#run module preservation
+```{r}
+system.time( {
+   mp = modulePreservation(multiExpr, multiColor,
+referenceNetworks = 1,
+nPermutations = 200,
+networkType = "signed",
+randomSeed = 1,
+quickCor = 0,
+verbose = 3)
+} );
+# Save the results
+#save(mp, file = "modulePreservation.RData");
+```
+
+#plot module preservation
+```{r}
+ref = 1
+test = 2
+
+modColors = rownames(mp$preservation$observed[[ref]][[test]])
+moduleSizes = mp$preservation$Z[[ref]][[test]][, 1];
+# leave grey and gold modules out
+plotMods = !(modColors %in% c("grey", "gold"));
+# Text labels for points
+text = modColors[plotMods];
+# Auxiliary convenience variable
+plotData = cbind(mp$preservation$observed[[ref]][[test]][, 2], mp$preservation$Z[[ref]][[test]][, 2])
+# Main titles for the plot
+mains = c("Preservation Median rank", "Preservation Zsummary");
+# Start the plot
+sizeGrWindow(10, 5);
+#pdf(fi="Plots/BxHLiverFemaleOnly-modulePreservation-Zsummary-medianRank.pdf", wi=10, h=5)
+par(mfrow = c(1,2))
+par(mar = c(4.5,4.5,4.5,1))
+for (p in 1:2)
+{
+  min = min(plotData[, p], na.rm = TRUE);
+  max = max(plotData[, p], na.rm = TRUE);
+  # Adjust ploting ranges appropriately
+  if (p==2)
+  {
+    if (min > -max/10) min = -max/10
+    ylim = c(min - 0.1 * (max-min), max + 0.1 * (max-min))
+  } else
+    ylim = c(0,30)
+  plot(moduleSizes[plotMods], plotData[plotMods, p], col = 1, bg = modColors[plotMods], pch = 21,
+      main = mains[p],
+      cex = 2.4,
+      ylab = mains[p], xlab = "Module size", log = "x",
+      ylim = ylim,
+      xlim = c(10, 2000), cex.lab = 1.2, cex.axis = 1.2, cex.main =1.4)
+labelPoints(moduleSizes[plotMods],plotData[plotMods, p], labels = text, cex = 0.5, offs = 0.02);
+  # For Zsummary, add threshold lines
+if (p==2) {
+    abline(h=0)
+    abline(h=2, col = "blue", lty = 2)
+    abline(h=10, col = "darkgreen", lty = 2)
+} }
+
+
+```
+#isolate specific pathways
+```{r}
+GO:0001510
+rna_methylation <- SelectSigGOgenes(turquoise_go_bp,"GO:0001510",turquoise)
+defense_bac <- SelectSigGOgenes(ly_go_bp,"GO:0042742",lightyellow)
+hypersensitive<- SelectSigGOgenes(green_go_bp,"GO:0009626",green)
+ER_stress <- SelectSigGOgenes(green_go_bp,"GO:0034976",green)
+salt_stress <- SelectSigGOgenes(purple_go_bp,"GO:0009651",purple)
+id_biosynthesis <- SelectSigGOgenes(yellow_go_bp,"GO:0019288", df_sub)
+
+leaf_translation <- df_leaf_sub[df_leaf_sub$Gene %in% blue$Gene, ]
+
+df_sub[df_sub$gene %in% translation, ]
+leaf_translation <- leaf_translation[-grep("only",leaf_translation$Accession), ]
+ggplot(leaf_translation, aes(x = l2fc, y = l2p))+geom_point()
+turquoise[turquoise$Gene %in% translation,]
+
+
+```
+#export to cytoscape
+```{r}
+modules = c("yellow", "red","turquoise")
+inModule = is.finite(match(moduleColors, modules))
+modProbes = probes[inModule] # This should probably be modProves = names(probes)[inModule]
+modTOM = adjacency[inModule, inModule]
+dimnames(modTOM) = list(modProbes, modProbes)
+cyt = exportNetworkToCytoscape(modTOM, weighted = TRUE, nodeAttr = moduleColors[inModule])
+selectTree <- hclust(as.dist(modTOM),method = "average")
+TOMplot(dissTOM, geneTree, moduleColors, main = "Network heatmap plot, selected genes")
+
+heatmap(modTOM)
+
+node_data <- cyt$edgeData
+node_data <- cyt$nodeData
+node_data <- node_data[-grep("only",node_data$nodeName),]
+node_data <- node_data[-grep("only",node_data$fromNode),]
+node_data <- node_data[-grep("only", node_data$nodeName),]
+node_data <- node_data[node_data$nodeName %in% hub_genes$ProbeID, ]
+node_data <- node_data[node_data$fromNode %in% hub_genes$ProbeID,]
+node_data <- node_data[node_data$nodeName %in% hub_genes$ProbeID,]
+node_data <- merge.data.frame(node_data, hub_gene_v4[,c("ProbeID","geneTraitSignificance")], by.x = "nodeName", by.y = "ProbeID", all.x = T, all.y = F)
+node_data$geneTraitSignificance <- abs(node_data$geneTraitSignificance)
+
+node_data[node_data$nodeName == "Zm00001d034192_T001","nodeName"] <- "lem1"
+node_data[node_data$nodeName== "Zm00001d026286_T001","nodeName"] <- "rps11"
+node_data[node_data$nodeName == "Zm00001d021716_T001","nodeName"] <- "crp1"
+node_data[node_data$nodeName == "Zm00001d034059_T001","nodeName"] <- "mta1"
+node_data[node_data$nodeName == "Zm00001d049059_T001","nodeName"] <- "adh2"
+node_data[node_data$nodeName == "Zm00001d010159_T001","nodeName"] <- "act1"
+node_data[node_data$nodeName == "Zm00001d028221_T001","nodeName"] <- "atp4"
+node_data[node_data$nodeName == "Zm00001d026603_T002","nodeName"] <- "chlH/gun5"
+node_data[node_data$nodeName == "Zm00001d027656_T001","nodeName"] <- "lls1"
+node_data[node_data$nodeName == "Zm00001d018891_T001","nodeName"] <- "crp4"
+node_data[node_data$nodeName == "Zm00001d023536_T001","nodeName"] <- "oy1"
+node_data[node_data$nodeName == "Zm00001d002358_T001","nodeName"] <- "cpx1"
+
+node_data[node_data$nodeName == "Zm00001d034865_T001","nodeName"] <- "PPR protein mitochondrial"
+node_data[node_data$nodeName == "Zm00001d002789_T001","nodeName"] <- "PPR protein"
+node_data[node_data$nodeName == "Zm00001d042884_T003","nodeName"] <- "Acyl-coenzyme A oxidase"
+node_data[node_data$nodeName == "Zm00001d041036_T001","nodeName"] <- "RER3"
+node_data[node_data$nodeName == "Zm00001d046555_T001","nodeName"] <- "embryo specific 18"
+
+node_data[node_data$nodeName == "ZeamMp119.1","nodeName"] <- "rsp7-ct"
+node_data[node_data$nodeName == "ZeamMp129.1","nodeName"] <- "orf247-ct"
+node_data[node_data$nodeName == "ZemaCp004.1","nodeName"] <- "rsp16"
+node_data[node_data$nodeName == "ZemaCp016.1","nodeName"] <- "rps2"
+node_data[node_data$nodeName == "ZemaCp021.1","nodeName"] <- "rps14"
+node_data[node_data$nodeName == "ZemaCp026.1","nodeName"] <- "rps4"
+node_data[node_data$nodeName == "ZemaCp045.1","nodeName"] <- "rps18"
+node_data[node_data$nodeName == "ZemaCp046.1","nodeName"] <- "rpl20"
+node_data[node_data$nodeName == "ZemaCp058.1","nodeName"] <- "rps8"
+node_data[node_data$nodeName == "ZemaCp061.1","nodeName"] <- "rps3"
+node_data[node_data$nodeName == "ZemaCp063.1","nodeName"] <- "rps19"
+node_data[node_data$nodeName == "ZemaCp065.1","nodeName"] <- "rpl2"
+node_data[node_data$nodeName == "ZemaCp082.1","nodeName"] <- "rps15"
+
+colnames(node_data) <- c("nodeName","altName","nodeAttr")
+
+                                               
+write.csv(node_data,"cytoscape_edge_input_2.csv")
+write.csv(node_data,"cytoscape_node_input_2.csv")
+#edge_node <- merge.data.frame(edge_data,node_data[,c("nodeName","nodeAttr")], by.x = "nodeName", by.y = "nodeName", all = FALSE)
+#edge_node[edge_node$nodeAttr == "grey60","nodeAttr"] <- "grey"
+#node_data[node_data$nodeAttr == "grey60", "nodeAttr"] <- "grey"
+
+colnames(df_sub_interest) <- moduleColors[inModule]
+log_interest <- apply(df_sub_interest, 1:2, log2)
+
+quantile_heatmap <- quantile(df_sub_interest,probs = c(0.05,0.95))
+range(df_sub_interest)
+
+adjust_range <- function(a){
+  if (a < 0.8){
+    a = 0.8
+  }else if
+   (a > 1.2){
+    a = 1.2
+   }
+  a
+}
+
+df_sub_hub <- df_sub[,protein_hub$ProbeID]
+df_sub_hub_adjusted <- apply(df_sub_hub,c(1,2),adjust_range)
+df_sub_interest_adjusted_ordered <- df_sub_interest_adjusted[c(9,10,11,13,15,7,3,6,1,2,4,5,8,12,14),]
+
+quantile(df_sub_interest_adjusted)
+colors = seq(-0.8,0.8,length = 101)
+my_palette <- colorRampPalette(c("yellow","gray","darkblue"))(n = 100)
+
+par(mar = c(5,25,3,10))
+heatmap.2(df_sub_interest_adjusted_ordered, Colv = T,reorderfun=function(d,w) reorder(d,w,agglo.FUN = mean),rowsep = c(4,12),dendrogram = "both",scale = "none", trace = "none",ColSideColors = select_colors, density.info = "none", col = my_palette, breaks = colors,cexRow = 1.2,offsetCol = 0,offsetRow = -0.4, margins = c(7,7.5), labCol = NA, keysize = 1,key.xlab = "HYB/MP",key.xtickfun=function() {
+               cex <- par("cex")*par("cex.axis")
+               side <- 1
+               line <- 0
+               col <- par("col.axis")
+               font <- par("font.axis")
+               mtext("<0.9", side=side, at=0, adj=0,
+                     line=line, cex=cex, col=col, font=font)
+              mtext("1", side=side, at=0.5, adj=0.5,
+                     line=line, cex=cex, col=col, font=font)
+               mtext(">1.2", side=side, at=1, adj=1,
+                     line=line, cex=cex, col=col, font=font)
+               return(list(labels=FALSE, tick=FALSE))
+          })
+
+
+
+select_colors <- moduleColors[inModule]
+length(grep("only",modProbes))
+select_colors <- select_colors[-grep("only",modProbes)]
+
+modulegene_height <- cbind(df_sub_interest,hyb_traits$plant.height)
+colnames(modulegene_height)[1474] <- "plant_height"
+select_colors <- select_colors[-2,]  
+select_colors <- append(select_colors,"yellow")
+select_colors <- select_colors[-1474]
+
+rownames(df_exp) <- c("BM","MB","B84B","B84M","A682B","A682M","RIL_BM","14B","14M","16B","16M","21B","21M","317B","317M")
+df_exp_1 <- df_exp 
+rownames(df_exp_1)[1:6] <- paste0("6hybrid_",rownames(df_exp_1)[1:6])
+rownames(df_exp_1)[1] <- "6hybrid_BM"
+rownames(df_exp_1)[8:15] <- paste0("RIL_",rownames(df_exp_1)[8:15])
+
+hyb_traits$scale_tallest <- hyb_traits$plant.height/hyb_traits["B682",1]
+
+
+#RNA_GOI
+hyb_traits_reordered <- hyb_traits[c(1,5,13,15,4,11,9,2,10,7,3,12,14,8,6),]
+
+par(mar = c(3,5,3,2))
+barplot(hyb_traits_reordered[,7], 
+#col = c("black","black","black","black","gray","gray","gray","gray","gray","gray","gray","gray","white","white","white"), 
+font.lab = 2, cex.axis = 1.6, cex.lab = 2, ylim = c(1,1.5))
+
+#protein
+hyb_traits_reordered <- hyb_traits[c(5,4,2,1,15,10,9,11,13,7,6,3,14,8,12),]
+
+#RNA
+hyb_traits_reordered <- hyb_traits[c(5,1,2,4,13,9,11,15,7,10,3,6,14,8,12),]
+
+
+
+
+ heatmap.2(df_sub_interest_adjusted_ordered, reorderfun=reorder(d, w, agglo.FUN = max) )
+ heatmap.2(df_sub_interest_adjusted_ordered, Rowv = F)
+```
+
+
+```{r}
+v4 <- read.csv("~/Desktop/rotation_Briggs/gene_model_xref_v4.csv", header = T, stringsAsFactors = F)
+hub_gene_v4 <- merge.data.frame(v4[,c("v4_gene_model","v2_gene_model")],hub_genes, by.x = "v4_gene_model", by.y = "Gene", all.x = F, all.y = T)
+classic_gene <- read.csv("~/Desktop/rotation_Briggs/classical_gene_maize.csv", header = F, stringsAsFactors = F)
+colnames(classic_gene) <- classic_gene[2,]
+classic_gene <- classic_gene[-(1:2),]
+hub_gene_v4 <- merge.data.frame(classic_gene[,c("Symbol","Gene Name","B73 refgen2 Gene")], hub_gene_v4, by.x = "B73 refgen2 Gene", by.y = "v2_gene_model", all.x = F, all.y = T)
+classical_gene <- merge.data.frame(v4[,c("v4_gene_model","v2_gene_model")], classic_gene[,c("Symbol","Gene Name","B73 refgen2 Gene")], by.x = "v2_gene_model", by.y = "B73 refgen2 Gene", all.x = F, all.y = T)
+
+datOutput$gene <- substr(datOutput$ProbeID, start = 1, stop = 14)
+table(datOutput[datOutput$gene %in% classical_PML, "moduleColors"])
+
+
+
+detected_accession <- df_sub[df_sub$gene %in% classical_PML, "Accession"]
+detected_accession <- detected_accession[-grep("only",detected_accession)]
+classical_detected <- classical_gene[classical_gene$v4_gene_model %in% df_sub$gene, "v4_gene_model"]
+classical_detected <- na.omit(classical_detected)
+
+PMl <- merge.data.frame(v4[,c("v4_gene_model","v2_gene_model")],PML,by.x = "v2_gene_model", by.y = "V1", all.x = F, all.y = T)
+PML_detected <- PMl$v4_gene_model
+PML_detected <- na.omit(PML_detected)
+
+classical_PML <- append(classical_detected, PML_detected)
+classical_PML <- unique(classical_PML)
+classical_PML <- na.omit(classical_PML)
+
+fisher.test(matrix(c(16, 257, 193, 3727), 2, 2), alternative='greater')
+
+PML <- read.csv("~/Desktop/rotation_Briggs/PML_ID.csv", header = F)
+
+hub_gene_v4[hub_gene_v4$`B73 refgen2 Gene` %in% PML$V1,]
+write.csv(hub_gene_v4,"hub_genes_classical.csv")
+
+df_sub[df_sub$gene == "Zm00001d023677",]
+```
+
+```{r}
+table(SL_GOI$Category)
+PPDK <- SL_GOI[grep("pyruvate orthophosphate",SL_GOI$Protein),]
+PPDK_detected <- datOutput[datOutput$gene %in% PPDK$Gene, "ProbeID"]
+PPDK_detected <- PPDK_detected[-grep("only",PPDK_detected)]
+cor(mergedMEs$MEyellow,df_exp[,PPDK_detected[5]])
+yellow_hub_ID <- hub_genes[hub_genes$moduleColors == "yellow",]
+yellow_hub_ID <- yellow_hub_ID[!yellow_hub_ID$Category == "Mt.Ribo",]
+mean(cor(df_exp[,yellow_hub_ID$ProbeID],df_exp[,PPDK_detected[5]]))
+
+
+PPDK_leaf <- data.frame(5,2)
+colnames(PPDK_leaf) <- c("Accession","Mean_cor")
+for (i in 1:length(PPDK_detected)){
+  PPDK_leaf[i,"Accession"] <- PPDK_detected[i]
+  PPDK_leaf[i,"Mean_cor"] <- mean(cor(df_exp[,yellow_hub_ID$ProbeID],df_exp[,PPDK_detected[i]]))
+}
+
+PPDK_leaf <- merge.data.frame(PPDK_leaf, SL_GOI[,c("Accession","Protein")], by.x = "Accession", by.y = "Accession",all.x = T, all.y = F)
+PPDK_leaf <- merge.data.frame(PPDK_leaf, datOutput[,c("ProbeID","geneTraitSignificance")],by.x = "Accession",by.y = "ProbeID",all.x = T,all.y = F)
+CA_leaf$Protein <- gsub("carbonic anhydrase","CA",CA_leaf$Protein)
+ggplot(CA_leaf,aes(CA_leaf$Mean_cor,CA_leaf$geneTraitSignificance))+geom_point()+ ylim(-1,1)+xlim(-1,1)+ geom_text(aes(label = CA_leaf$Protein), hjust = 0.5, vjust = -1, size = 3) + xlab("mean correlation to plastid ribosomes")+ ylab("gene significance")
+
+PEPC_leaf <- data.frame(1,1)
+colnames(PEPC_leaf) <- c("Accession","Mean_cor")
+for (i in 1:length(PEPC_detected)){
+  PEPC_leaf[i,"Accession"] <- PEPC_detected[i]
+  PEPC_leaf[i,"Mean_cor"] <- mean(cor(df_exp[,yellow_hub_ID$ProbeID],df_exp[,PEPC_detected[i]]))
+}
+
+PEPC_leaf <- merge.data.frame(PEPC_leaf, SL_GOI[,c("Accession","Protein")], by.x = "Accession", by.y = "Accession",all.x = T, all.y = F)
+PEPC_leaf <- merge.data.frame(PEPC_leaf, datOutput[,c("ProbeID","geneTraitSignificance")],by.x = "Accession",by.y = "ProbeID",all.x = T,all.y = F)
+
+CA <- SL_GOI[grep("carbonic anhydrase",SL_GOI$Protein),]
+CA <- CA[-grep("Ox",CA$Category),]
+CA_detected <- datOutput[datOutput$gene %in% CA$Gene, "ProbeID"]
+CA_detected <- CA_detected[-grep("only",CA_detected)]
+
+CA_leaf <- data.frame(1,1)
+colnames(CA_leaf) <- c("Accession","Mean_cor")
+for (i in 1:length(CA_detected)){
+  CA_leaf[i,"Accession"] <- CA_detected[i]
+  CA_leaf[i,"Mean_cor"] <- mean(cor(df_exp[,yellow_hub_ID$ProbeID],df_exp[,CA_detected[i]]))
+}
+
+CA_leaf <- merge.data.frame(CA_leaf, SL_GOI[,c("Accession","Protein")], by.x = "Accession", by.y = "Accession",all.x = T, all.y = F)
+CA_leaf <- merge.data.frame(CA_leaf, datOutput[,c("ProbeID","geneTraitSignificance")],by.x = "Accession",by.y = "ProbeID",all.x = T,all.y = F)
+
+```
+
+
+
+
+
+#new protein modules
+```{r}
+#lightyellow
+lightyellow_all <- protein_WGCNA[protein_WGCNA$moduleColors == "lightyellow", c("protein","moduleColors","geneTraitSignificance","gene","kMElightyellow","ProbeID")]
+lightyellow_all <- lightyellow_all[!lightyellow_all$kMElightyellow <= 0.4,]
+lightyellow_all <- merge.data.frame(lightyellow_all, corncyc, by.x = "gene", by.y = "Gene.ID", all.x = T)
+lightyellow_all <- merge.data.frame(lightyellow_all, candidate_gene[,c(1:2,4:6)], by.x = "gene", by.y = "Accession", all.x = T)
+lightyellow_all <- merge.data.frame(lightyellow_all, complex_v4[,2:3], by.x = "gene", by.y = "v4_gene_model", all.x = T)
+lightyellow_all <- lightyellow_all[-which(duplicated(lightyellow_all$geneTraitSignificance)),]
+
+#red
+red_all <- protein_WGCNA[protein_WGCNA$moduleColors == "red", c("protein","moduleColors","geneTraitSignificance","gene","kMEred")]
+red_all <- red_all[!red_all$kMEred <= 0.4,]
+#red_all <- merge.data.frame(red_all, corncyc, by.x = "gene", by.y = "Gene.ID", all.x = T)
+red_all <- merge.data.frame(red_all, candidate_gene[,c(1:2,4:6)], by.x = "gene", by.y = "Gene", all.x = T)
+red_all <- merge.data.frame(red_all, SL_GOIs[,c("Gene","Category")], by.x = "gene", by.y = "Gene", all.x = T)
+
+red_all <- merge.data.frame(red_all, complex_v4[,2:3], by.x = "gene", by.y = "v4_gene_model", all.x = T)
+red_all <- red_all[-which(duplicated(red_all$geneTraitSignificance)),]
+
+#salmon
+salmon_all <- protein_WGCNA[protein_WGCNA$moduleColors == "salmon", c("protein","moduleColors","geneTraitSignificance","gene","kMEsalmon")]
+salmon_all <- salmon_all[!salmon_all$kMEsalmon <= 0.4,]
+salmon_all <- merge.data.frame(salmon_all, corncyc, by.x = "gene", by.y = "Gene.ID", all.x = T)
+salmon_all <- merge.data.frame(salmon_all, candidate_gene[,c(1,3,5)], by.x = "gene", by.y = "Accession", all.x = T)
+salmon_all <- merge.data.frame(salmon_all, complex_v4[,2:3], by.x = "gene", by.y = "v4_gene_model", all.x = T)
+salmon_all <- salmon_all[-which(duplicated(salmon_all$geneTraitSignificance)),]
+
+
+#lightcyan
+lightcyan_all <- protein_WGCNA[protein_WGCNA$moduleColors == "lightcyan", c("protein","moduleColors","geneTraitSignificance","gene","kMElightcyan")]
+lightcyan_all <- lightcyan_all[!lightcyan_all$kMElightcyan <= 0.4,]
+lightcyan_all <- merge.data.frame(lightcyan_all, corncyc, by.x = "gene", by.y = "Gene.ID", all.x = T)
+lightcyan_all <- merge.data.frame(lightcyan_all, candidate_gene[,c(1,3,5)], by.x = "gene", by.y = "Accession", all.x = T)
+lightcyan_all <- merge.data.frame(lightcyan_all, complex_v4[,2:3], by.x = "gene", by.y = "v4_gene_model", all.x = T)
+lightcyan_all <- lightcyan_all[-which(duplicated(lightcyan_all$geneTraitSignificance)),]
+
+
+
+```
+
+
+#SEC complex data
+```{r}
+sec_complex <- read.csv("~/Desktop/Lab/Regulator story/test_candidate_gene/SEC_complex.csv", stringsAsFactors = F)
+sec_complex <- sec_complex[,-(13:33)]
+sec_complex <- sec_complex[-grep("only",sec_complex$Accession),]
+sec_complex <- sec_complex[-grep("DIV",sec_complex$HYBB73_F2F3F4),]
+sec_complex$Gene <- substr(sec_complex$Accession, start = 1, stop = 14)
+sec_complex <- merge.data.frame(sec_complex, complex_v4[,2:3], by.x = "Gene", by.y = "v4_gene_model", all.x = T)
+sec_complex <- merge.data.frame(sec_complex, candidate_gene[,1:6], by.x = "Gene", by.y = "Gene", all.x = T)
+
+sec_complex <- sec_complex[-which(duplicated(sec_complex$Accession)),]
+
+rubisco_sec <- sec_complex[sec_complex$Gene %in% rubisco$Gene,]
+sec_complex_marcotte <- sec_complex[sec_complex$Gene %in% complex_v4$v4_gene_model,]
+
+sec_complex_marcotte[,5:7] <- as.numeric(unlist(sec_complex_marcotte[,5:7]))
+
+sec_complex_marcotte_summary_B73 <- sec_complex_marcotte %>% group_by(complex_label) %>% summarize(m = mean(B73_F2F3F4, na.rm = T))
+sec_complex_marcotte_summary_B73$genotype <- "B73"
+sec_complex_marcotte_summary_BM <- sec_complex_marcotte %>% group_by(complex_label) %>% summarize(m = mean(BM_F2F3F4, na.rm = T))
+sec_complex_marcotte_summary_BM$genotype <- "BM"
+sec_marcotte_summary <- rbind(sec_complex_marcotte_summary_B73,sec_complex_marcotte_summary_BM)
+sec_marcotte_summary <- read.csv("sec_marcotte_summary.csv")
+
+write.csv(sec_marcotte_summary, "sec_marcotte_summary.csv")
+levels(sec_marcotte) <- c("19S proteasome","20S proteasome")
+
+sec_marcotte_selected <- sec_marcotte_summary[grep("EF",sec_marcotte_summary$complex_label),]
+
+ggplot(sec_marcotte_selected,aes(fill = genotype, y = m, x = complex_label)) +geom_bar(position = "dodge", stat = "identity") + ylab("B73 and BM mean percentage in complex") +  
+  theme(axis.text.x = element_text(size=7))
+```
+
+
+#RNA data input for whisker plot
+```{r}
+cpm_leaf_6H_UPR <- cpm.all[cpm.all$Gene %in% ER_UPR$Gene, c(1,32:41)]
+cpm_leaf_6H_UPR$Symbol <- ER_UPR[match(cpm_leaf_6H_UPR$Gene,ER_UPR$Gene),"Symbol"]
+cpm_leaf_RIL_UPR <- cpm.RIL.all[cpm.RIL.all$Gene %in% ER_UPR$Gene, c(1,61:75)]
+length(match(cpm_leaf_6H_UPR$Gene,cpm_leaf_RIL_UPR$Gene))
+#pvalue
+cpm_leaf_6H_UPR$p_value <- ttestFun(cpm_leaf_6H_UPR,2:5, 6:11)
+cpm_leaf_RIL_UPR$pvalue <- ttestFun(cpm_leaf_RIL_UPR,c(2:6,8,10:13,14),c(7,9,15:16))
+
+cpm_leaf_6H_UPR[,13:22] <- cpm_leaf_6H_UPR[,2:11]/cpm_leaf_6H_UPR$B73
+colnames(cpm_leaf_6H_UPR)[13:22] <- paste("6hybrid_",colnames(cpm_leaf_6H_UPR)[13:22])
+cpm_leaf_RIL_UPR[,17:31] <- cpm_leaf_RIL_UPR[,2:16]/cpm_leaf_RIL_UPR$B73
+colnames(cpm_leaf_RIL_UPR)[17:31] <- paste("RIL_",colnames(cpm_leaf_RIL_UPR)[17:31])
+
+cpm_leaf_UPR_all <- cbind(cpm_leaf_6H_UPR[,13:16],cpm_leaf_RIL_UPR[,c(17,19:20,23,26,29)],cpm_leaf_6H_UPR[,17:22],cpm_leaf_RIL_UPR[,c(18,21:22,24:25,27:28,30:31)])
+
+
+rownames(cpm_leaf_UPR_all) <- cpm_leaf_6H_UPR$Gene
+cpm_leaf_UPR_all_whisker_input <- cbind(row = rownames(cpm_leaf_UPR_all),stack(cpm_leaf_UPR_all))
+
+cpm_leaf_UPR_all_whisker_input$Genotype <- ""
+cpm_leaf_UPR_all_whisker_input[1:420, "Genotype"] <- "Inbred"
+cpm_leaf_UPR_all_whisker_input[421:1050, "Genotype"] <- "Hybrid"
+cpm_leaf_UPR_all_whisker_input$Pathway <- "ER stress/UPR genes"
+cpm_leaf_UPR_all_whisker_input$MF <- ER_UPR[match(cpm_leaf_UPR_all_whisker_input$row,ER_UPR$Gene),"MF"]
+
+cpm_leaf_UPR_all_whisker_input_selected$Symbol <- ER_UPR[match(cpm_leaf_UPR_all_whisker_input_selected$row,ER_UPR$Gene),"Symbol"]
+cpm_leaf_UPR_all$Symbol <- ER_UPR[match(rownames(cpm_leaf_UPR_all),ER_UPR$Gene),"Symbol"]
+write.csv(cpm_leaf_UPR_all_whisker_input,"cpm_leaf_UPR_whisker_input.csv")
+ER_UPR_selected <- c("Zm00001d015091","Zm00001d007042","Zm00001d038189","Zm00001d025305","Zm00001d038648","Zm00001d033906","Zm00001d014792","Zm00001d036401","Zm00001d006350","Zm00001d021347","Zm00001d005460")
+cpm_leaf_UPR_all_whisker_input_selected <- cpm_leaf_UPR_all_whisker_input[cpm_leaf_UPR_all_whisker_input$row %in% ER_UPR_selected,]
+
+
+
+#ERAD
+cpm_leaf_6H_ERAD <- cpm.all[cpm.all$Gene %in% ERAD$Gene, c(1,32:41)]
+cpm_leaf_6H_ERAD$pvalue <- ttestFun(cpm_leaf_6H_ERAD,c(2:5),c(6:7,9:10))
+cpm_leaf_6H_ERAD$Symbol <- ERAD[match(cpm_leaf_6H_ERAD$Gene,ERAD$Gene),"Symbol"]
+
+cpm_leaf_RIL_ERAD <- cpm.RIL.all[cpm.RIL.all$Gene %in% ERAD$Gene, c(1,61:75)]
+length(match(cpm_leaf_6H_ERAD$Gene,cpm_leaf_RIL_ERAD$Gene))
+
+cpm_leaf_6H_ERAD[,12:21] <- cpm_leaf_6H_ERAD[,2:11]/cpm_leaf_6H_ERAD$B73
+colnames(cpm_leaf_6H_ERAD)[12:21] <- paste("6hybrid_",colnames(cpm_leaf_6H_ERAD)[12:21])
+cpm_leaf_RIL_ERAD[,17:31] <- cpm_leaf_RIL_ERAD[,2:16]/cpm_leaf_RIL_ERAD$B73
+colnames(cpm_leaf_RIL_ERAD)[17:31] <- paste("RIL_",colnames(cpm_leaf_RIL_ERAD)[17:31])
+cpm_leaf_ERAD <- cbind(cpm_leaf_6H_ERAD[,12:15],cpm_leaf_RIL_ERAD[,c(17,19:20,23,26,29)],cpm_leaf_6H_ERAD[,16:21],cpm_leaf_RIL_ERAD[,c(18,21:22,24:25,27:28,30:31)])
+rownames(cpm_leaf_ERAD) <- cpm_leaf_6H_ERAD$Gene
+cpm_leaf_ERAD$Symbol <- ERAD[match(rownames(cpm_leaf_ERAD),ERAD$Gene),"Symbol"]
+
+cpm_leaf_ERAD_whisker_input <- cbind(row = rownames(cpm_leaf_ERAD),stack(cpm_leaf_ERAD[,1:25]))
+cpm_leaf_ERAD_whisker_input$Genotype <- ""
+cpm_leaf_ERAD_whisker_input[1:480, "Genotype"] <- "Inbred"
+cpm_leaf_ERAD_whisker_input[481:1200, "Genotype"] <- "Hybrid"
+cpm_leaf_ERAD_whisker_input$Pathway <- "ERAD components"
+cpm_leaf_ERAD_whisker_input$MF <- ERAD[match(cpm_leaf_ERAD_whisker_input$row,ERAD$Gene),"MF"]
+cpm_leaf_UPR_ERAD_whisker_input <- rbind(cpm_leaf_UPR_all_whisker_input,cpm_leaf_ERAD_whisker_input)
+write.csv(cpm_leaf_UPR_ERAD_whisker_input,"cpm_leaf_UPR_ERAD_whisker_input.csv")
+cpm_leaf_ERAD_whisker_input$Symbol <- ERAD[match(cpm_leaf_ERAD_whisker_input$row,ERAD$Gene),"Symbol"]
+ERAD_selected <- c("UBC32","HRD1A/B","HRD3A/SEL1","EBS7","MNS4","MNS5","OS9/EBS6")
+cpm_leaf_ERAD_whisker_input_selected <- cpm_leaf_ERAD_whisker_input[cpm_leaf_ERAD_whisker_input$Symbol %in% ERAD_selected,]
+#tissue
+tissue_whisker_canonical <-
+read.csv("~/Desktop/cpm_tissue_canonical_UPR.csv")
+tissue_whisker_canonical[,13:22] <- tissue_whisker_canonical[,2:11]/tissue_whisker_canonical$B73
+#Canonical-Coleo
+tissue_whisker_canonical_coleo <- cbind(row = tissue_whisker_canonical[1:8,1],stack(tissue_whisker_canonical[1:8,13:22]))
+tissue_whisker_canonical_coleo$tissue <- "Coleoptile"
+tissue_whisker_canonical_coleo$Genotype <- ""
+tissue_whisker_canonical_coleo[1:32,"Genotype"] <- "Inbred"
+tissue_whisker_canonical_coleo[33:80,"Genotype"] <- "Hybrid"
+
+#Leaf
+tissue_whisker_canonical_leaf <- cbind(row = tissue_whisker_canonical[9:16,1],stack(tissue_whisker_canonical[9:16,13:22]))
+tissue_whisker_canonical_leaf$tissue <- "Leaf"
+tissue_whisker_canonical_leaf$Genotype <- ""
+tissue_whisker_canonical_leaf[1:32,"Genotype"] <- "Inbred"
+tissue_whisker_canonical_leaf[33:80,"Genotype"] <- "Hybrid"
+
+#Root
+tissue_whisker_canonical_root <- cbind(row = tissue_whisker_canonical[17:24,1],stack(tissue_whisker_canonical[17:24,13:22]))
+tissue_whisker_canonical_root$tissue <- "Root"
+tissue_whisker_canonical_root$Genotype <- ""
+tissue_whisker_canonical_root[1:32,"Genotype"] <- "Inbred"
+tissue_whisker_canonical_root[33:80,"Genotype"] <- "Hybrid"
+
+tissue_whisker_canonical_all <- rbind(tissue_whisker_canonical_coleo,tissue_whisker_canonical_leaf,tissue_whisker_canonical_root)
+tissue_whisker_canonical_all$Symbol <- whisker_input_RNA[match(tissue_whisker_canonical_all$row,whisker_input_RNA$Gene),"Symbol"]
+
+#ER UPR
+cpm_coleo_UPR <- coleo_6H_cpm[coleo_6H_cpm$Gene %in% ER_UPR$Gene, c(1,32:41)]
+cpm_coleo_UPR$Symbol <- ER_UPR[match(cpm_coleo_UPR$Gene,ER_UPR$Gene),"Symbol"]
+cpm_root_UPR <- root_6H_cpm[root_6H_cpm$Gene %in% ER_UPR$Gene, c(1,31:40)]
+cpm_root_UPR$Symbol <- ER_UPR[match(cpm_root_UPR$Gene,ER_UPR$Gene),"Symbol"]
+cpm_coleo_UPR[,13:22] <- cpm_coleo_UPR[,2:11]/cpm_coleo_UPR$B73
+cpm_coleo_UPR_selected <- cpm_coleo_UPR[cpm_coleo_UPR$Symbol %in% ER_UPR_Symbol_selected, c(1,12:22)]
+cpm_root_UPR[,13:22] <- cpm_root_UPR[,2:11]/cpm_root_UPR$B73
+cpm_root_UPR_selected <- cpm_root_UPR[cpm_root_UPR$Symbol %in% ER_UPR_Symbol_selected, c(1,12:22)]
+cpm_leaf_UPR_selected <- cpm_leaf_6H_UPR[cpm_leaf_6H_UPR$Symbol %in% ER_UPR_Symbol_selected, c(1,12:22)]
+
+cpm_coleo_UPR_in <- cbind(row = cpm_coleo_UPR_selected$Gene,stack(cpm_coleo_UPR_selected[,3:12]))
+cpm_coleo_UPR_in$tissue <- "Coleoptile"
+cpm_coleo_UPR_in$genotype <- "Inbred"
+cpm_coleo_UPR_in[53:130,"genotype"] <- "Hybrid"
+
+
+cpm_root_UPR_in <- cbind(row = cpm_root_UPR_selected$Gene,stack(cpm_root_UPR_selected[,3:12]))
+cpm_root_UPR_in$tissue <- "Root"
+cpm_root_UPR_in$genotype <- "Inbred"
+cpm_root_UPR_in[53:130,"genotype"] <- "Hybrid"
+
+cpm_leaf_UPR_in <- cbind(row = cpm_leaf_UPR_selected$Gene,stack(cpm_leaf_UPR_selected[,3:12]))
+cpm_leaf_UPR_in$tissue <- "Leaf"
+cpm_leaf_UPR_in$genotype <- "Inbred"
+cpm_leaf_UPR_in[53:130,"genotype"] <- "Hybrid"
+
+cpm_tissue_UPR <- rbind(cpm_leaf_UPR_in,cpm_coleo_UPR_in,cpm_root_UPR_in)
+write.csv(cpm_tissue_UPR,"cpm_6H_tissue_UPR_whiskerinput.csv")
+cpm_tissue_UPR$symbol <- ER_UPR[match(cpm_tissue_UPR$row,ER_UPR$Gene),"Symbol"]
+
+#ERAD
+cpm_coleo_ERAD <- coleo_6H_cpm[coleo_6H_cpm$Gene %in% ERAD$Gene, c(1,32:41)]
+cpm_coleo_ERAD$Symbol <- ERAD[match(cpm_coleo_ERAD$Gene,ERAD$Gene),"Symbol"]
+cpm_root_ERAD <- root_6H_cpm[root_6H_cpm$Gene %in% ERAD$Gene, c(1,31:40)]
+cpm_root_ERAD$Symbol <- ERAD[match(cpm_root_ERAD$Gene,ER_UPR$Gene),"Symbol"]
+cpm_coleo_UPR[,13:22] <- cpm_coleo_UPR[,2:11]/cpm_coleo_UPR$B73
+cpm_coleo_UPR_selected <- cpm_coleo_UPR[cpm_coleo_UPR$Symbol %in% ER_UPR_Symbol_selected, c(1,12:22)]
+cpm_root_UPR[,13:22] <- cpm_root_UPR[,2:11]/cpm_root_UPR$B73
+cpm_root_UPR_selected <- cpm_root_UPR[cpm_root_UPR$Symbol %in% ER_UPR_Symbol_selected, c(1,12:22)]
+cpm_leaf_UPR_selected <- cpm_leaf_6H_UPR[cpm_leaf_6H_UPR$Symbol %in% ER_UPR_Symbol_selected, c(1,12:22)]
+
+cpm_coleo_UPR_in <- cbind(row = cpm_coleo_UPR_selected$Gene,stack(cpm_coleo_UPR_selected[,3:12]))
+cpm_coleo_UPR_in$tissue <- "Coleoptile"
+cpm_coleo_UPR_in$genotype <- "Inbred"
+cpm_coleo_UPR_in[53:130,"genotype"] <- "Hybrid"
+
+
+cpm_root_UPR_in <- cbind(row = cpm_root_UPR_selected$Gene,stack(cpm_root_UPR_selected[,3:12]))
+cpm_root_UPR_in$tissue <- "Root"
+cpm_root_UPR_in$genotype <- "Inbred"
+cpm_root_UPR_in[53:130,"genotype"] <- "Hybrid"
+
+cpm_leaf_UPR_in <- cbind(row = cpm_leaf_UPR_selected$Gene,stack(cpm_leaf_UPR_selected[,3:12]))
+cpm_leaf_UPR_in$tissue <- "Leaf"
+cpm_leaf_UPR_in$genotype <- "Inbred"
+cpm_leaf_UPR_in[53:130,"genotype"] <- "Hybrid"
+
+cpm_tissue_UPR <- rbind(cpm_leaf_UPR_in,cpm_coleo_UPR_in,cpm_root_UPR_in)
+write.csv(cpm_tissue_UPR,"cpm_6H_tissue_UPR_whiskerinput.csv")
+cpm_tissue_UPR$symbol <- ER_UPR[match(cpm_tissue_UPR$row,ER_UPR$Gene),"Symbol"]
+```
+
+
+#Protein data input for whisker plot
+```{r}
+#UPR
+Protein_whisker_UPR <- Protein_all_genotype_mean[Protein_all_genotype_mean$Gene %in% ER_UPR$Gene,]
+Protein_whisker_UPR[,27:36] <- Protein_whisker_UPR[,1:10]/Protein_whisker_UPR$X6Hybrid_B73
+Protein_whisker_UPR[,37:51] <- Protein_whisker_UPR[11:25]/Protein_whisker_UPR$RIL_B73
+Protein_whisker_UPR <- Protein_whisker_UPR[!Protein_whisker_UPR$X6Hybrid_B73 == 0,]
+Protein_whisker_UPR <-
+Protein_whisker_UPR[!Protein_whisker_UPR$RIL_16 == 0,]
+Protein_whisker_UPR <-
+Protein_whisker_UPR[!Protein_whisker_UPR$RIL_21 == 0,]
+Protein_whisker_UPR <-
+Protein_whisker_UPR[-which(is.na(Protein_whisker_UPR$RIL_B73)),]
+Protein_whisker_UPR$Symbol <- ER_UPR[match(Protein_whisker_UPR$Gene,ER_UPR$Gene),"Symbol"]
+Protein_whisker_UPR_selected <- Protein_whisker_UPR[Protein_whisker_UPR$Symbol %in% ER_UPR_Symbol_selected,26:51]
+Protein_whisker_UPR_selected <- Protein_whisker_UPR_selected[,c(1:5,12:13,15,18,21,24,6:11,14,16:17,19:20,22:23,25:26)]
+                                      
+Protein_whisker_UPR_in <- cbind(row = Protein_whisker_UPR_selected$Gene,stack(Protein_whisker_UPR_selected[,2:26]))
+Protein_whisker_UPR_in$Genotype <- ""
+Protein_whisker_UPR_in[1:90,"Genotype"] <- "Inbred"
+Protein_whisker_UPR_in[91:225,"Genotype"] <- "Hybrid"
+
+Protein_whisker_UPR_in$Symbol <- ER_UPR[match(Protein_whisker_UPR_in$row,ER_UPR$Gene),"Symbol"]
+Protein_whisker_UPR_in$MF <- cpm_leaf_UPR_all_whisker_input[match(Protein_whisker_UPR_in$row,cpm_leaf_UPR_all_whisker_input$row),"MF"]
+
+#ERAD
+Protein_whisker_ERAD <- Protein_all_genotype_mean[Protein_all_genotype_mean$Gene %in% ERAD$Gene,]
+Protein_whisker_ERAD[,27:36] <- Protein_whisker_ERAD[,1:10]/Protein_whisker_ERAD$X6Hybrid_B73
+Protein_whisker_ERAD[,37:51] <- Protein_whisker_ERAD[11:25]/Protein_whisker_ERAD$RIL_B73
+Protein_whisker_ERAD <- Protein_whisker_ERAD[!Protein_whisker_ERAD$X6Hybrid_B73 == 0,]
+Protein_whisker_ERAD <- Protein_whisker_ERAD[-which(is.na(Protein_whisker_ERAD$RIL_B73)),]
+Protein_whisker_ERAD <- Protein_whisker_ERAD[!Protein_whisker_ERAD$RIL_14 == 0,]
+Protein_whisker_ERAD <- Protein_whisker_ERAD[!Protein_whisker_ERAD$RIL_16 == 0,]
+Protein_whisker_ERAD <- Protein_whisker_ERAD[!Protein_whisker_ERAD$RIL_317 == 0,]
+Protein_whisker_ERAD$Symbol <- ERAD[match(Protein_whisker_ERAD$Gene,ERAD$Gene),"Symbol"]
+Protein_whisker_ERAD_selected <- Protein_whisker_ERAD[,26:51]
+Protein_whisker_ERAD_selected <- Protein_whisker_ERAD_selected[,c(1:5,12:13,15,18,21,24,6:11,14,16:17,19:20,22:23,25:26)]
+
+
+Protein_whisker_ERAD_in <- cbind(row = Protein_whisker_ERAD$Gene,stack(Protein_whisker_ERAD_selected[,2:26]))
+Protein_whisker_ERAD_in$Genotype <- ""
+Protein_whisker_ERAD_in[1:150,"Genotype"] <- "Inbred"
+Protein_whisker_ERAD_in[151:375,"Genotype"] <- "Hybrid"
+Protein_whisker_ERAD_in$Symbol <- ERAD[match(Protein_whisker_ERAD_in$row,ERAD$Gene),"Symbol"]
+
+
+
+Protein_whisker_ERAD_in$MF <- cpm_leaf_ERAD_whisker_input[match(Protein_whisker_ERAD_in$row,cpm_leaf_ERAD_whisker_input$row),"MF"]
+
+
+#Protein 11 tissue
+Protein_11_tissue <- read.csv("~/Desktop/protein_11tissue_whisker.csv")
+Protein_leaf_sdl_mature <- read.csv("~/Desktop/Lab/Regulator story/test_candidate_gene/leaf_protein_seedling_mature.csv")
+Protein_11_tissue_UPR <- merge.data.frame(Protein_11_tissue_UPR,Protein_leaf_sdl_mature[,c(1:6,15)],by.x = "Accession",by.y = "Accession",all.x = T)
+Protein_11_tissue$Gene <- substr(Protein_11_tissue$Accession,start = 1, stop = 14)
+Protein_11_tissue_UPR <- Protein_11_tissue[Protein_11_tissue$Gene %in% ER_UPR$Gene,]
+Protein_11_tissue_UPR <- Protein_11_tissue_UPR[-grep("only",Protein_11_tissue_UPR$Accession),]
+Protein_11_tissue_UPR <- Protein_11_tissue_UPR[!Protein_11_tissue_UPR$Ear_B73 == 0,]
+Protein_11_tissue_UPR_normalize <- data.frame()
+Protein_11_tissue_UPR_normalize[1:16,1:3] <- Protein_11_tissue_UPR[,2:4]/Protein_11_tissue_UPR$Kernel14_B73_avg
+Protein_11_tissue_UPR_normalize[,4:6] <- Protein_11_tissue_UPR[,5:7]/Protein_11_tissue_UPR$Kernel14_B73_2
+Protein_11_tissue_UPR_normalize[,7:9] <- Protein_11_tissue_UPR[,8:10]/Protein_11_tissue_UPR$Root_B73
+Protein_11_tissue_UPR_normalize[,10:12] <- Protein_11_tissue_UPR[,11:13]/Protein_11_tissue_UPR$Endo14_B73
+Protein_11_tissue_UPR_normalize[,13:15] <- Protein_11_tissue_UPR[,14:16]/Protein_11_tissue_UPR$Endo14_B73_1
+Protein_11_tissue_UPR_normalize[,16:18] <- Protein_11_tissue_UPR[,17:19]/Protein_11_tissue_UPR$Emb27_B73
+Protein_11_tissue_UPR_normalize[,19:21] <- Protein_11_tissue_UPR[,20:22]/Protein_11_tissue_UPR$Emb27_B73_1
+Protein_11_tissue_UPR_normalize[,22:24] <- Protein_11_tissue_UPR[,23:25]/Protein_11_tissue_UPR$Endo27_B73
+Protein_11_tissue_UPR_normalize[,25:27] <- Protein_11_tissue_UPR[,26:28]/Protein_11_tissue_UPR$Endo27_B73_1
+Protein_11_tissue_UPR_normalize[,28:30] <- Protein_11_tissue_UPR[,29:31]/Protein_11_tissue_UPR$coleo_B73
+Protein_11_tissue_UPR_normalize[,31:33] <- Protein_11_tissue_UPR[,32:34]/Protein_11_tissue_UPR$Radicleroot_B73
+Protein_11_tissue_UPR_normalize[,34:36] <- Protein_11_tissue_UPR[,35:37]/Protein_11_tissue_UPR$Germem_B73
+Protein_11_tissue_UPR_normalize[,37:39] <- Protein_11_tissue_UPR[,38:40]/Protein_11_tissue_UPR$Sdlrt_B73
+Protein_11_tissue_UPR_normalize[,40:42] <- Protein_11_tissue_UPR[,41:43]/Protein_11_tissue_UPR$Meristem_B73
+Protein_11_tissue_UPR_normalize[,43:45] <- Protein_11_tissue_UPR[,44:46]/Protein_11_tissue_UPR$Ear_B73
+Protein_11_tissue_UPR_normalize[,46:48] <- Protein_11_tissue_UPR[,48:50]/Protein_11_tissue_UPR$Seedling_B73
+Protein_11_tissue_UPR_normalize[,49:51] <- Protein_11_tissue_UPR[,51:53]/Protein_11_tissue_UPR$Mature_B73
+Protein_11_tissue_UPR$Symbol <- ER_UPR[match(Protein_11_tissue_UPR$Gene, ER_UPR$Gene),"Symbol"]
+
+
+
+Protein_11_tissue_UPR_normalize$Gene <- Protein_11_tissue_UPR$Gene
+Protein_11_tissue_UPR_in <- cbind(row = Protein_11_tissue_UPR_normalize$Gene,stack(Protein_11_tissue_UPR_normalize[,c(1:51)]))
+Protein_11_tissue_UPR_in[,4:5] <- str_split_fixed(Protein_11_tissue_UPR_in$ind,"_",2)
+Protein_11_tissue_UPR_in[,6:7] <- str_split_fixed(Protein_11_tissue_UPR_in$V5,"_",2)
+Protein_11_tissue_UPR_in <- Protein_11_tissue_UPR_in[,-c(5,7)]
+Protein_11_tissue_UPR_in[Protein_11_tissue_UPR_in$V4 == "Kernel","V4"] <- "Kernel14"
+tissue_category <- data.frame(table(Protein_11_tissue_UPR_in$V4))
+tissue_category$type <- "Non-Green"
+tissue_category[tissue_category$Var1 %in% green_tissue,"type"] <- "Green"
+green_tissue <- c("coleo","Meristem","Mature","Seedling")
+Protein_11_tissue_UPR_in$Tissue <- tissue_category[match(Protein_11_tissue_UPR_in$V4,tissue_category$Var1),"type"]
+Protein_11_tissue_UPR_in$Genotype <- "Hybrid"
+Protein_11_tissue_UPR_in[Protein_11_tissue_UPR_in$V6 == "B73"|Protein_11_tissue_UPR_in$V6 == "Mo17","Genotype"] <- "Inbred"
+table(Protein_11_tissue_UPR_in$Genotype)
+Protein_11_tissue_UPR_in$Symbol <- ER_UPR[match(Protein_11_tissue_UPR_in$row, ER_UPR$Gene),"Symbol"]
+ER_UPR_selected <- c("Zm00001d003857","Zm00001d009783","Zm00001d014993","Zm00001d020687","Zm00001d033906","Zm00001d036401","Zm00001d040766","Zm00001d014792","Zm00001d049099")
+Protein_11_tissue_UPR_selected <- Protein_11_tissue_UPR_in[Protein_11_tissue_UPR_in$row %in% ER_UPR_selected,]
+Protein_11_tissue_UPR_selected$percentage <- Protein_11_tissue_UPR_selected$values*100
+
+```
+
+
+#whisker plot
+```{r}
+whisker_input <- read.csv("~/Desktop/Lab/Regulator story/test_candidate_gene/RNA_protein_canonical_whisker.csv")
+whisker_input_RNA <- whisker_input[whisker_input$Data_type == "RNA",]
+whisker_input_RNA$Symbol <- factor(whisker_input_RNA$Symbol, levels = c("bzip60(-0.73)", "PDI1(-0.73)" ,"Der1(-0.67)","BIP2(-0.64)","BIP1(-0.60)","ERDJ3B(-0.58)","CRT2(-0.52)","CNX1(-0.4)"))
+
+whisker_input_protein <- whisker_input[whisker_input$Data_type == "Protein",]
+whisker_input_protein$Symbol <- factor(whisker_input_protein$Symbol, levels = c("CNX1(-0.40)", "PDI1(-0.35)" ,"BIP1(-0.15)","CRT2(0.04)"))
+rownames(whisker_input) <- whisker_input$Accession
+whisker_input <- whisker_input[,-1]
+whisker_input <- data.frame(t(whisker_input))
+whisker_input <- whisker_input[-32,]
+whisker_input$Names <- rownames(whisker_input)
+RNA_whisker_bzip60 <- read.csv("~/Desktop/Lab/Regulator story/test_candidate_gene/cpm_bzip60_whisker.csv")
+
+  ggplot(stress_0h_UPRERAD_whisker, aes(values,symbol,color = genotype)) +geom_boxplot() +
+     theme(axis.text =element_text(size=6, color = "black"), legend.text = element_text(size=7), axis.title = element_text(size=10),axis.text.x = element_text(size = 6,color = "black", angle = 45, vjust = 0.7), legend.title = element_text(size = 9),  axis.title.y = element_text(hjust = 1)) + xlab("Mean RNA expression as a percentage of B73") +ylab("ER stress/ERAD genes")+coord_flip() +
+     facet_wrap(~tissue)
+#theme(axis.text = element_text(size = 6, color = "black")) 
+```
+
+
+#check plastid encoded
+```{r}
+plastid_encoded_protein <- Protein_all_genotype[grep("Zema",Protein_all_genotype$Gene),c(1:11,108:134)]
+plastid_encoded_protein <- merge.data.frame(plastid_encoded_protein, protein_WGCNA[,c("geneTraitSignificance","gene","protein")], by.x = "Gene", by.y = "gene", all.x = T)
+plastid_encoded_protein <- merge.data.frame(plastid_encoded_protein, plastid_encoded_ID[,c(1,3,4)], by.x = "Gene", by.y = "Gene")
+
+plastid_encoded_protein[,c(2:12,14:38)]<- as.numeric(plastid_encoded_protein[,c(2:12,14:38)]
+
+plastid_encoded_protein$l2_Seedling_HMP <- log2(plastid_encoded_protein$Seedling_leaf_HMP)
+plastid_encoded_protein$l2_Seedling_B73_Mo17 <- log2(plastid_encoded_protein$mean_Seedling_B73/plastid_encoded_protein$mean_Seedling_Mo17)
+plastid_encoded_protein$l2_B73_A682 <- log2(plastid_encoded_protein$X6Hybrid_B73/plastid_encoded_protein$X6Hybrid_A682)
+plastid_encoded_protein$l2_HMP_B682 <- log2(plastid_encoded_protein$X6Hybrid_A682xB73/((plastid_encoded_protein$X6Hybrid_B73+plastid_encoded_protein$X6Hybrid_A682)/2))
+plastid_encoded_protein$l2_HMP_B84 <- log2(plastid_encoded_protein$X6Hybrid_B84xB73/((plastid_encoded_protein$X6Hybrid_B73+plastid_encoded_protein$X6Hybrid_B84)/2))
+plastid_encoded_protein$l2_HMP_M682 <- log2(plastid_encoded_protein$X6Hybrid_A682xMo17/((plastid_encoded_protein$X6Hybrid_Mo17+plastid_encoded_protein$X6Hybrid_A682)/2))
+Hybrid_B73+plastid_encoded_protein$X6Hybrid_B84)/2))
+plastid_encoded_protein$l2_HMP_B14 <- log2(plastid_encoded_protein$RIL_B14/((plastid_encoded_protein$RIL_B73+plastid_encoded_protein$RIL_14)/2))
+
+
+
+
+
+
+PEP_complex <- candidate_gene[grep("PEP",candidate_gene$Molecular.Phenotype),]
+PEP_core <- candidate_gene[candidate_gene$Type == "PEP",]
+PEP_complex <- merge.data.frame(PEP_complex, Protein_all_genotype[,c(1:11,108,134)], by.x = "Gene", by.y = "Gene", all.x = T)
+PEP_complex <- merge.data.frame(PEP_complex, protein_WGCNA[,c("geneTraitSignificance","gene","protein","moduleColors")], by.x = "Gene", by.y = "gene", all.x = T)
+PEP_complex <- PEP_complex[-grep("only",PEP_complex$Accession),]
+
+PEP_core <- PEP_core[,-(7:10)]
+PEP_core <- merge.data.frame(PEP_core,protein_WGCNA[,c("geneTraitSignificance","gene","protein")], by.x = "Gene", by.y = "gene", all.x = T)
+PEP_core <- merge.data.frame(PEP_core,Protein_all_genotype[,c(1:11,108,134)], by.x = "Gene", by.y = "Gene", all.x = T)
+PEP_core <- PEP_core[-which(duplicated(PEP_core$Accession)),]
+
+PEP_complex$acs_ratio_rpoA <- PEP_complex$mean_B73acs_acs/PEP_core[4,"mean_B73acs_acs"]
+PEP_complex$acs_B73_ratio_rpoA <- PEP_complex$mean_B73acs_B73/PEP_core[4,"mean_B73acs_B73"]
+
+PEP_complex$Seedling_B73_ratio <- PEP_complex$mean_Seedling_B73/PEP_core[4,"mean_Seedling_B73"]
+PEP_complex$Seedling_Mo17_ratio <- PEP_complex$mean_Seedling_Mo17/PEP_core[4,"mean_Seedling_Mo17"]
+PEP_complex$Seedling_BM_ratio <- PEP_complex$mean_Seedling_BM/PEP_core[4,"mean_Seedling_BM"]
+
+PEP_core$Seedling_B73_ratio <- PEP_core$mean_Seedling_B73/PEP_core$mean_Seedling_B73
+PEP_core$Seedling_Mo17_ratio <- PEP_core$mean_Seedling_Mo17/PEP_core$mean_Seedling_B73
+PEP_core$Seedling_BM_ratio <- PEP_core$mean_Seedling_BM/PEP_core$mean_Seedling_B73
+
+
+
+
+PAP <- PEP_complex[PEP_complex$Type == "PAP", c(1:2, 14:16)]
+PAP$B73_ratio <- PAP$mean_Seedling_B73/PAP$mean_Seedling_B73
+PAP$Mo17_ratio <- PAP$mean_Seedling_Mo17/PAP$mean_Seedling_B73
+PAP$BM_ratio <- PAP$mean_Seedling_BM/PAP$mean_Seedling_B73
+PEP_core_seedling <- PEP_core[,c(1:2,12:14)]
+PEP_core_seedling$B73_ratio <- PEP_core_seedling$mean_Seedling_B73/PEP_core_seedling$mean_Seedling_B73
+PEP_core_seedling$Mo17_ratio <- PEP_core_seedling$mean_Seedling_Mo17/PEP_core_seedling$mean_Seedling_B73
+PEP_core_seedling$BM_ratio <- PEP_core_seedling$mean_Seedling_BM/PEP_core_seedling$mean_Seedling_B73
+
+PEP_dependent_sample <- c("psaB","psbC","psbA","rbcL")
+plastid_encoded_protein_seedling <- plastid_encoded_protein[plastid_encoded_protein$protein %in% PEP_dependent_sample,c(1,40,5:7)]
+colnames(plastid_encoded_protein_seedling)[2] <- "Symbol"
+
+plastid_encoded_protein_seedling$B73_ratio <- plastid_encoded_protein_seedling$mean_Seedling_B73/plastid_encoded_protein_seedling$mean_Seedling_B73
+plastid_encoded_protein_seedling$Mo17_ratio <- plastid_encoded_protein_seedling$mean_Seedling_Mo17/plastid_encoded_protein_seedling$mean_Seedling_B73
+plastid_encoded_protein_seedling$BM_ratio <- plastid_encoded_protein_seedling$mean_Seedling_BM/plastid_encoded_protein_seedling$mean_Seedling_B73
+
+PEP_heatmap <- rbind(plastid_encoded_protein_seedling,PEP_core_seedling, PAP)
+PEP_heatmap_in <- as.matrix(PEP_heatmap[,6:8])
+PEP_heatmap_in <- PEP_heatmap_in[-6,]
+rownames(PEP_heatmap_in) <- PEP_heatmap$Symbol
+heatmap(PEP_rpoA_ratio_in, cexCol = 0.5, cexRow = 0.6)
+
+PEP_rpoA_ratio <- PEP_complex[,c(1:2,28:30)]
+PEP_rpoA_ratio <- PEP_rpoA_ratio[-which(is.na(PEP_rpoA_ratio$Seedling_B73_ratio)),]
+PEP_rpoA_ratio$B73_ratio <- PEP_rpoA_ratio$Seedling_B73_ratio/PEP_rpoA_ratio$Seedling_B73_ratio
+PEP_rpoA_ratio$Mo17_ratio <- PEP_rpoA_ratio$Seedling_Mo17_ratio/PEP_rpoA_ratio$Seedling_B73_ratio
+PEP_rpoA_ratio$BM_ratio <- PEP_rpoA_ratio$Seedling_BM_ratio/PEP_rpoA_ratio$Seedling_B73_ratio
+PEP_rpoA_ratio_in <- as.matrix(PEP_rpoA_ratio[,6:8])
+rownames(PEP_rpoA_ratio_in) <- PEP_rpoA_ratio$Symbol
+colnames(PEP_rpoA_ratio_in) <- c("B73_ratio_to_rpoA","Mo17_ratio_to_rpoA","BM_ratio_to_rpoA")
+
+PAP_barplot <- NULL
+PAP_barplot <- append(PAP_barplot,PAP[,5])
+PAP_barplot <- append(PAP_barplot, PAP[,6])
+PAP_barplot <- append(PAP_barplot, PAP[,7])
+PAP_barplot <- data.frame(PAP_barplot)
+PAP_barplot$genotype <- ""
+
+PAP_barplot[1:12,"genotype"] <- "B73"
+PAP_barplot[13:24,"genotype"] <- "Mo17"
+PAP_barplot[25:36,"genotype"] <- "BM"
+PAP_barplot$Gene <- ""
+PAP_barplot[1:12,"Gene"] <- PAP$Symbol
+PAP_barplot[13:24,"Gene"] <- PAP$Symbol
+PAP_barplot[25:36,"Gene"] <- PAP$Symbol
+colnames(PAP_barplot)[1] <- "ratio_to_rpoA"
+ggplot(PAP_barplot, aes(x = Gene, y = ratio_to_rpoA, fill = genotype)) +geom_bar(position = "dodge", stat = "identity") + coord_cartesian(ylim=c(0.9,1.3))
+
+PAP_scatter <- PAP <- PEP_complex[PEP_complex$Type == "PAP", c(1:2,29,33)]
+ggplot(PAP_scatter, aes(Seedling_Mo17_ratio, Seedling_Mo17_ratio_rpoA)) +geom_point() + xlim(0.5,1.5) +ylim(0.5,1.5)
+```
+
+
+
+#pie chart
+```{r}
+ggplot(UPR_plot, aes(x =symbol, y=values, color = data)) +
+  geom_boxplot()+
+  #geom_bar(stat = "identity", position = position_dodge()) +
+  coord_flip() +
+  xlab("")+
+  ylab("Expression heterosis (hybrid/mid-parent) of hybrids")+
+  scale_color_manual(values = c("Protein" = "turquoise", "RNA" = "salmon"))+
+  #ylab("Percentage of selected genes")+
+  #ggtitle("Top pathways enriched in selected genes (MM>0.8,GS>0.6)")+
+  #theme_bw()+
+ #ylim(0,1) + 
+  theme(axis.text.y = element_text(size = 10, face = "bold", color = "black"), legend.text = element_text(size = 8, color = "black", face = "bold"), legend.title = element_text(size = 8, color = "black", face = "bold"),
+                    plot.title = element_text(size = 11.5, face = "bold"),
+        plot.title.position = "panel",
+
+        #axis.title.y = element_text(size= 15, face = "bold"), 
+        axis.text.x.bottom  = element_text(size = 9, face = "bold")) +
+
+   
+
+
+theme(axis.text.y = element_text(size = 10, color = "black", face = "bold"),
+      axis.text.x = element_text(size = 10,  color = "black", face = "bold"),
+      axis.title.x = element_text(size = 12, face = "bold", color = "black", vjust =-0.5),
+      legend.title = element_blank(),
+      legend.text = element_text(size = 10, face = "bold", color = "black"),
+      legend.position = "top",
+      legend.text.align = 0.5,
+       strip.text = element_text(size = 10, face = "bold")) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "gray40", size = 0.5)
+  #facet_wrap(~tissue)
+
+
+```
+
+```{r}
+protein_WGCNA[grep("UBP",protein_WGCNA$Protein),]
+```
+

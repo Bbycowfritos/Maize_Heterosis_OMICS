@@ -1,0 +1,582 @@
+---
+title: "BNFO286_finalproject"
+author: "Bridget Bai"
+date: "2023-05-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(WGCNA)
+```
+#protein dataset
+```{r}
+protein_network <- Tissue_full_PD
+
+#HP
+protein_network_HHP <- Tissues_full_HP_PD[,c(1,grep("HHP",colnames(Tissues_full_HP_PD)))]
+protein_network_HHP <- protein_network_HHP[,-grep("pval",colnames(protein_network_HHP))]
+#protein_network_sdl <- protein_network_HMP[,c(1,grep("Leaf", colnames(protein_network_HMP)))]
+protein_network_HHP[is.na(protein_network_HHP)] <- 0
+protein_network_NA <- protein_network_HHP
+protein_network_NA[is.na(protein_network_NA)] <- "INF"
+protein_network_NA <- protein_network_NA[,2:19] == "INF"
+rownames(protein_network_NA) <- protein_network_HHP$Accession
+
+#LP
+protein_network_HLP <- protein_network[,c(1,grep("HLP",colnames(protein_network)))]
+protein_network_HLP <- protein_network_HHP[,-grep("Endo",colnames(protein_network_HLP))]
+#protein_network_sdl <- protein_network_HMP[,c(1,grep("Leaf", colnames(protein_network_HMP)))]
+protein_network_NA <- protein_network_HLP
+protein_network_NA[is.na(protein_network_NA)] <- "INF"
+protein_network_NA <- protein_network_NA[,2:19] == "INF"
+rownames(protein_network_NA) <- protein_network_HLP$Accession
+
+#HMP
+protein_network_HMP <- Tissues_full_HP_PD[,c(1,grep("l2_HMP",colnames(Tissues_full_HP_PD)))]
+protein_network_HMP <- protein_network_HMP[,-grep("Endo",colnames(protein_network_HMP))]
+#protein_network_sdl <- protein_network_HMP[,c(1,grep("Leaf", colnames(protein_network_HMP)))]
+protein_network_NA_HMP <- protein_network_HMP
+protein_network_HMP[is.na(protein_network_HMP)] <- 0.00000001
+protein_network_NA_HMP <- protein_network_NA_HMP[,2:19] == "INF"
+rownames(protein_network_HMP) <- protein_network_HMP$Accession
+protein_network_HMP <- protein_network_HMP[,-1]
+
+
+
+
+protein_network_select_HHP <- data.frame(protein_network_NA[which(rowSums(protein_network_NA[,1:18]) < 6),])
+
+protein_network_input_HHP <- protein_network_HHP[protein_network_HHP$Accession %in% rownames(protein_network_select_HHP),]
+
+protein_network_input_HHP$Gene <- substr(protein_network_input_HHP$Accession, start = 1, stop = 14)
+
+
+
+
+protein_network_select_HMP <- data.frame(protein_network_NA_HMP[which(rowSums(protein_network_NA_HMP[,1:18]) < 6),])
+
+protein_network_input_HMP <- protein_network_HMP[protein_network_HMP$Accession %in% rownames(protein_network_select_HMP),]
+
+protein_network_input_HMP$Gene <- substr(protein_network_input_HMP$Accession, start = 1, stop = 14)
+
+#protein_network_sdl_input$Gene <- substr(protein_network_sdl_input$Accession, start = 1, stop = 14)
+
+#protein_network_sdl_input <- protein_network_sdl_input[-which(duplicated(protein_network_sdl_input$LeafBlade_l2_HMP)),]
+#length(unique(protein_network_sdl_input$Gene))
+
+#protein_network_input[,2:19] <- format(round(protein_network_input[,2:19], digits = 5))
+
+#for (i in 2:19){
+  #protein_network_input <- protein_network_input[-which(duplicated(protein_network_input[,i])),]
+#}
+
+length(unique(protein_network_input$Gene))
+
+
+#protein_network_input <- protein_network_input[,-grep("Auricle", colnames(protein_network_input))]
+```
+
+#calculate PD value as input 
+```{r}
+protein_network_PD <- data.frame(protein_network_input$Accession)
+
+network_all_tissues <- Tissues[-grep("Endo",Tissues)]
+
+for (i in 1:length(network_all_tissues)){
+  protein_network_PD[,i+1] <- protein_network_input[,paste0(network_all_tissues[i],"_l2_B73Mo17")]/protein_network_input[,paste0(network_all_tissues[i],"_l2_HMP")]
+}
+```
+#impute NA
+```{r}
+protein_network_input_HHP <- protein_network_input_HHP[-which(duplicated(protein_network_input_HHP$Gene)),]
+
+protein_network_input_HMP <- protein_network_input_HMP[-which(duplicated(protein_network_input_HMP$Gene)),]
+
+
+
+rownames(protein_network_input_HHP) <- protein_network_input_HHP[,1]
+protein_network_input_HHP <- protein_network_input_HHP[,-1]
+protein_network_input_HHP <- protein_network_input_HHP[,-19]
+protein_network_input_HHP[,1:18] <- as.numeric(unlist(protein_network_input_HHP[,1:18]))
+
+rownames(protein_network_input_HMP) <- protein_network_input_HMP[,1]
+protein_network_input_HMP <- protein_network_input_HMP[,-1]
+protein_network_input_HMP <- protein_network_input_HMP[,-19]
+#protein_network_input_HMP[is.na(protein_network_input_HMP)] <- 0
+protein_network_input_HMP[,1:18] <- as.numeric(unlist(protein_network_input_HMP[,1:18]))
+
+#protein_network_input[protein_network_input > log2(10)] <- log2(10)
+#protein_network_input[protein_network_input < -log2(10)] <- -log2(10)
+
+
+Tissue_input_mean_HHP <- data.frame(sapply(protein_network_HHP[,2:21], function(x)mean(x, na.rm = T)))
+Tissue_input_mean_HHP$Tissue <- rownames(Tissue_input_mean_HHP)
+colnames(Tissue_input_mean_HHP)[1] <- "mean"
+
+protein_network_input_HHP_inputed <- protein_network_input_HHP
+protein_network_input_HHP_inputed[is.na(protein_network_input_HHP_inputed)] <- 0
+#protein_network_input_imputed$Gene <- rownames(protein_network_input_imputed)
+
+for (i in 1:18){
+  
+  protein_network_input_HHP_inputed[which(protein_network_input_HHP_inputed[i] ==0),i] <-
+  
+    Tissue_input_mean_HHP[i,"mean"]
+
+  }
+
+
+
+
+
+
+
+Tissue_input_mean_HMP_inputed <- data.frame(sapply(protein_network_HMP[,2:21], function(x)mean(x, na.rm = T)))
+Tissue_input_mean_HMP$Tissue <- rownames(Tissue_input_mean_HMP)
+colnames(Tissue_input_mean_HMP)[1] <- "mean"
+
+protein_network_input_HMP_inputed <- protein_network_input_HMP
+protein_network_input_HMP_inputed[is.na(protein_network_input_HMP_inputed)] <- 0
+#protein_network_input_imputed$Gene <- rownames(protein_network_input_imputed)
+
+for (i in 1:18){
+  
+  protein_network_input_HMP_inputed[which(protein_network_input_HMP_inputed[i] ==0),i] <-
+  
+    Tissue_input_mean_HMP[i,"mean"]
+
+  }
+
+#protein_network_HHP_sample <- sample_n(protein_network_input_HHP_inputed, 1000)
+protein_network_HHP_input <- t(protein_network_input_HHP_inputed)
+```
+
+
+```{r}
+protein_network_sdl_input <- protein_network_sdl_input[-which(duplicated(protein_network_sdl_input$Gene)),]
+protein_network_sdl_matrix <- t(protein_network_sdl_input)
+colnames(protein_network_sdl_matrix) <- protein_network_sdl_input[,"Gene"]
+protein_network_sdl_matrix <- protein_network_sdl_matrix[-1,]
+protein_network_sdl_matrix <- protein_network_sdl_matrix[-7,]
+protein_network_HMP_input[,1:4871] <- as.numeric(unlist(protein_network_HMP_input[,1:4871]))
+```
+
+#plot distribution before and after imputation
+```{r}
+
+hist(na.omit(Tissue_full_HMP$ColeoptileTip_l2_HMP), probability = T, breaks = 20, xlim = )
+hist(na.omit(protein_network_input$ColeoptileTip_l2_HMP))
+
+```
+
+
+#find beta threshold
+```{r}
+
+#WGCNA_plot1 = function(df){
+    # Choose a set of soft-thresholding powers
+    powers = c(2:20)
+    # Call the network topology analysis function
+    sft = pickSoftThreshold(protein_network_HHP_input, powerVector = powers, networkType = "signed hybrid")
+
+    #plot
+    #require(repr)
+   # tiff('pick_beta_signed_RNA_01192022.tiff', units = "in", width = 8, height = 6, res = 300, compression = "lzw")
+    options(repr.plot.width=9, repr.plot.height=4)
+    par(mfrow = c(1,2));
+    cex1 = 0.9;
+    plot(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+    xlab="Soft Threshold (power)",ylab="Scale Free Topology Model Fit,signed R^2",type="n",
+    main = paste("Scale independence"));
+    text(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+    labels=powers,cex=cex1,col="red");
+    # this line corresponds to using an R^2 cut-off of h
+    abline(h=0.9,col="red")
+    # Mean connectivity as a function of the soft-thresholding power
+    plot(sft$fitIndices[,1], sft$fitIndices[,5],
+    xlab="Soft Threshold (power)",ylab="Mean Connectivity", type="n",
+    main = paste("Mean connectivity"))
+    text(sft$fitIndices[,1], sft$fitIndices[,5], labels=powers, cex=cex1,col="red")
+   # dev.off()
+
+
+#WGCNA_plot1(cpm_all_t)
+
+```
+
+#adjacency
+```{r}
+adjacency_HMP_tissue <-WGCNA::adjacency(protein_network_HHP_input, power = 6, type = "signed hybrid")
+
+TOM_HMP_tissue <- TOMdist(adjacency_HMP_tissue)
+
+protein_network_HMP_sample <- sample_n(protein_network_input_HMP_inputed, 6000)
+protein_network_HMP_input <- t(protein_network_input_HMP_inputed)
+protein_network_HMP_input <- log2(protein_network_HMP_input)
+
+protein_network_HHP_input <- log2(protein_network_HHP_input)
+protein_network_HHP_input <- t(protein_network_input_HHP_inputed)
+
+adjacency_HHP_pearson <- cor(protein_network_HHP_input, method = "pearson")
+adjacency_HHP_spearman <- cor(protein_network_HHP_input, method = "spearman")
+adjacency_HMP_spearman <- cor(protein_network_HMP_input, method = "spearman")
+
+#adjacency_HHP_tissue_thresholded <- adjacency_HHP_tissue
+#protein_network_HMP_thresholded <- adjacency_HMP_tissue[adjacency_HMP_tissue < 0.6] <- 0
+
+adjacency_HMP_tissue_dist <- as.matrix(as.dist(adjacency_HMP_tissue))
+
+
+
+
+
+```
+#turn adjacency to igraph object
+```{r}
+g_HHP <- graph.adjacency(as.matrix(as.dist(cor(protein_network_HHP_input, method = "pearson"))),
+  mode="undirected",
+  weighted=TRUE,
+  diag=FALSE
+)
+
+mst <- mst(g_HHP, algorithm="prim")
+
+# Remove edges below absolute Pearson correlation 0.8
+g_HHP_thresholded <- delete_edges(g_HHP, E(g_HHP)[E(g_HHP)$weight <0.8])
+
+# Remove any vertices remaining that have no edges
+g_HHP_thresholded <- delete_vertices(g_HHP_thresholded, degree(g_HHP_thresholded)==0)
+
+
+#community detection
+
+fg_PD <- cluster_fast_greedy(g_HHP)
+ 
+louvain_PD <- cluster_louvain(g_HHP_thresholded)
+
+#random_walk <- cluster_walktrap(g_HHP_thresholded)
+
+#louvain_PD$modularity
+louvain_PD
+fg_PD
+
+sizes(louvain_PD)
+
+#edge_betweenness_PD <- cluster_edge_betweenness(g_HHP_thresholded)
+#edge_betweenness_PD
+
+#N_gene_modularity_HMP <- data.frame(matrix(NA, nrow = 5, ncol = 3))
+#N_gene_modularity_HMP[16:18,1] <- nrow(protein_network_HMP_sample)
+#N_gene_modularity_HMP[16:18,2] <- c("fast_greedy", "louvain", "random_walk")
+#N_gene_modularity_HMP[16:18,3] <- c(modularity(fg_PD), modularity(louvain_PD), modularity(random_walk))
+```
+
+
+```{r}
+#output
+
+fast_greedy_out <- data.frame(fg_PD$names, fg_PD$membership)
+fast_greedy_out$Gene <- substr(fast_greedy_out$fg_PD.names, start = 1, stop = 14)
+colnames(fast_greedy_out) <- c("Accession","Membership","Gene")
+
+
+louvain_out <- data.frame(louvain_PD$names, louvain_PD$membership)
+louvain_out$Gene <- substr(louvain_out$louvain_PD.names, start = 1, stop = 14)
+colnames(louvain_out) <- c("Accession","Membership","Gene")
+
+fg_membership <- data.frame(table(fast_greedy_out$Membership))
+colnames(fg_membership) <- c("Membership","Count")
+
+louvain_membership <- data.frame(table(louvain_out$Membership))
+colnames(louvain_membership) <- c("Membership","Count")
+
+table(fast_greedy_out$Membership)
+
+#degree
+
+hist(degree(g_HHP), probability = T, xlab = "degree k", ylab = "p(k)", main = "")
+mean(degree(g_HHP_thresholded))
+
+```
+
+```{r}
+merge_module_GO <- function(df,gamer_tissue_cut, nodesize){
+  #df_1 <- datOutput_HLP[datOutput_HLP$moduleColors == a, c("Gene","moduleColors","G.S_height",b)]
+  #df_2 <- merge.data.frame(x = df_1, y = SL_GOI[, c("Gene","Protein","Category")], by.x = "ProbeID", by.y  = "Gene")  
+  #df_1 <- unique(df_1)
+  #df_1 <- df_1[order(df_1[,4],decreasing = TRUE), ]
+  #df_1 <- subset(df_1, df_1[,4] > 0.4)
+ #df_2 <- df_2[-(grep("only",df_2[,"ProbeID"])), ]
+merged_GO <- data.frame()
+  
+for (n in 1:3){
+  
+ 
+
+  gene2GO_TissueCut <- split((as.character(gamer_tissue_cut$term_accession)), gamer_tissue_cut$db_object_id)
+  gene2GOb_TissueCut <- gene2GO_TissueCut[-2]
+  str(head(gene2GOb_TissueCut))
+  geneNames_tissuecut <- names(gene2GOb_TissueCut)
+  #myInterestingGenes <- df$Gene  
+  geneList <- factor(as.integer(geneNames_tissuecut %in% df$Gene))
+  names(geneList) <- geneNames_tissuecut
+  GOdata <- new("topGOdata", ontology = ont[n], allGenes = geneList, annot = annFUN.gene2GO, nodeSize=nodesize, gene2GO = gene2GOb_TissueCut)
+
+resultFis <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+test.statF <- new("classicCount", testStatistic = GOFisherTest, name = "Fisher test")
+resultFisher <- getSigGroups(GOdata, test.statF)
+test.statKS <- new("classicScore", testStatistic = GOKSTest, name = "KS tests")
+resultKS <- getSigGroups(GOdata, test.statKS)
+test.statRW <- new("weightCount", testStatistic = GOFisherTest, name = "Fisher test", sigRatio = "ratio")
+resultWeight <- getSigGroups(GOdata, test.statRW)
+GO_DF <- GenTable(GOdata, classic = resultFisher, KS = resultKS, weight = resultWeight, orderBy = "classic", ranksOf = "classic", topNodes = 15)
+GO_DF$Ontology <- ont[n]
+merged_GO <- rbind(GO_DF,merged_GO)
+
+}
+merged_GO$classic_num <- as.numeric(as.character(merged_GO$classic))
+merged_GO$p.adj <- p.adjust(merged_GO$classic_num, method = "BH")
+merged_GO <- merged_GO[which(merged_GO$p.adj < 0.05),]
+merged_GO
+}
+
+```
+
+#GO enrichment function
+```{r}
+GO_enrichment = function(membership_count, membership_df){
+  
+  GO_all_out <- data.frame()
+  
+  gamercut <- gamer[gamer$db_object_id %in% membership_df$Gene, ]
+  
+  for (i in 1:nrow(membership_count)){
+    
+    if (membership_count[i,"Count"] > 100){
+      
+      GO_out <- merge_module_GO(membership_df[membership_df$Membership == membership_count[i,"Membership"],], gamercut, nodesize = 5)
+      
+      GO_out$Membership <- membership_count[i, "Membership"]
+      
+      GO_all_out <- rbind(GO_all_out, GO_out)
+      
+    }
+      
+  }
+  
+  GO_all_out
+}
+
+```
+
+#GO enrichment
+```{r}
+
+fg_GO <- GO_enrichment(fg_membership, fast_greedy_out)
+
+louvain_GO <- GO_enrichment(louvain_membership, louvain_out)
+
+
+
+```
+
+#selected modules
+```{r}
+fg_modules_protein <- fast_greedy_out[fast_greedy_out$Membership %in% fg_GO$Membership,]
+fg_modules_protein$Protein <- RNA_WGCNA[match(fg_modules_protein$Gene, RNA_WGCNA$Gene), "Protein"]
+
+louvain_modules_protein <- louvain_out[louvain_out$Membership %in% louvain_GO$Membership,]
+louvain_modules_protein$Protein <- RNA_WGCNA[match(louvain_modules_protein$Gene, RNA_WGCNA$Gene), "Protein"]
+```
+
+```{r}
+val_hist_HMP <- NA
+
+for (i in 1:ncol(protein_network_input_HMP_inputed)){
+  val_hist_HMP <- append(val_hist_HMP, protein_network_input_HMP_inputed[,i])
+}
+
+val_hist_HMP <- data.frame(val_hist_HMP)
+val_hist_HMP <- data.frame(val_hist_HMP[-1,])
+
+val_hist_all <- data.frame(append(val_hist_HMP$val_hist_HMP..1..., val_hist_HHP$val_hist_HHP..1...))
+
+colnames(val_hist_all) <- "value"
+val_hist_all$Type <- "HHP"
+val_hist_all[1:nrow(val_hist), "Type"] <- "HMP"
+
+
+hist(val_hist_HHP, probability = T, breaks = 50)
+
+ggplot(val_hist_all, aes(x = log2(value), fill = Type))  +
+  geom_density(aes(y = ..scaled.., color = Type), position = "identity", alpha = 0.7) +
+  xlim(-1,1) +
+ theme_minimal()+
+  theme(legend.position = "bottom")+
+  xlab("")+
+ylab("Density")+
+  theme(legend.title = element_blank())
+      
+
+
+```
+#modularity plot
+```{r}
+ggplot(N_gene_modularity_HMP, aes(X1, X3, color = X2)) + geom_line() +
+  ylim(0.5,1)
+```
+
+```{r}
+plot(
+  mst,
+  layout=layout.fruchterman.reingold,
+  edge.curved=TRUE,
+
+  vertex.label.dist=-0.5,
+  vertex.label.color="black",
+  asp=FALSE,
+  vertex.label.cex=0.6,
+  edge.width=edgeweights <- E(mst)$weight,
+  edge.arrow.mode=0,
+  main="My first graph")
+```
+
+```{r}
+HHP_top_200_edge <- read.csv("~/Downloads/HHP_top200_coexpression.csv")
+HHP_top_200_edge <- HHP_top_200_edge[,-1]
+colnames(HHP_top_200_edge) <- c("P1", "P2")
+HHP_top_200_edge$G1 <- substr(HHP_top_200_edge$P1, start = 1, stop = 14)
+HHP_top_200_edge$G2 <- substr(HHP_top_200_edge$P2, start = 1, stop = 14)
+HHP_top_200_edge$Protein1 <- RNA_WGCNA[match(HHP_top_200_edge$G1, RNA_WGCNA$Gene), "Protein"]
+HHP_top_200_edge$Protein2 <- RNA_WGCNA[match(HHP_top_200_edge$G2, RNA_WGCNA$Gene), "Protein"]
+```
+
+```{r}
+HHP_top_BC <- read.csv("~/Downloads/HHP_BC_top50.csv")
+HHP_top_BC <- data.frame(HHP_top_BC[,-1])
+colnames(HHP_top_BC) <- "Accession"
+HHP_top_BC$Gene <- substr(HHP_top_BC$Accession, start = 1, stop = 14)
+HHP_top_BC$Protein <- RNA_WGCNA[match(HHP_top_BC$Gene, RNA_WGCNA$Gene), "Protein"]
+
+HHP_cent <- read.csv("~/Downloads/HHP_centrality.csv")
+HHP_cent <- HHP_cent[,-1]
+colnames(HHP_cent)[1] <- "Accession"
+HHP_cent$Gene <- substr(HHP_cent$Accession, start = 1, stop = 14)
+HHP_cent$Protein <- RNA_WGCNA[match(HHP_cent$Gene, RNA_WGCNA$Gene), "Protein"]
+HHP_cent$Complex <- complex[match(HHP_cent$Gene, complex$Gene), "complex_label"]
+```
+
+```{r}
+HHP_top50_BC <- HHP_cent[order(HHP_cent$BC, decreasing = T),]
+HHP_top50_BC <- HHP_top50_BC[1:50,]
+gamer_BC <- gamer[gamer$db_object_id %in% HHP_cent$Gene,]
+HHP_top50_BC_GO <- merge_module_GO(HHP_top50_BC, gamer_tissue_cut = gamer_BC, nodesize = 5)
+```
+
+```{r}
+HHP <- read.csv("~/Downloads/HHP_louvain_nodedata_2.csv")
+HMP$Gene <- substr(HMP$Protein, start = 1, stop = 14)
+HHP_C3 <- HMP[HMP$community == 3,2:4]
+gamer_C3 <- gamer[gamer$db_object_id %in% HHP_cen_all$Gene,]
+HHP_C5 <- HHP[HHP$community == 4,2:4]
+HHP_C6 <- HHP[HHP$community == 7,2:4]
+  HHP_cen$Protein <- RNA_WGCNA[match(HHP_cen$Gene,  RNA_WGCNA$Gene), "Protein"]
+ HHP_cen$Complex <- complex[match(HHP_cen$Gene, complex$Gene), "complex_label"]
+
+HMP_GO <- merge_module_GO(, gamer_tissue_cut = gamer_C3, nodesize = 10)
+HHP_GO <- merge_module_GO(BC_PC, gamer_tissue_cut = gamer_C3, nodesize = 10)
+
+HHP_GO_5 <- merge_module_GO(HHP_C5, gamer_tissue_cut = gamer_C3, nodesize = 5)
+HHP_GO_6 <- merge_module_GO(HHP_C6, gamer_tissue_cut = gamer_C3, nodesize = 5)
+```
+
+```{r}
+HMP <- read.csv("~/Downloads/HHP_louvain_nodedata_2.csv")
+
+HMP_cen <- read.csv("~/Desktop/HMP_centrality.csv")
+HHP_cen <- read.csv("~/Desktop/HHP_centrality.csv")
+HHP_cen$Gene <- substr(HHP_cen$Protein, start = 1, stop = 14)
+
+HHP_cent_cor <- cor(HHP_cen[,2:6],HHP_cen[,2:6])
+
+HHP_cent_cor_pvalue <- corPvalueStudent(HHP_cent_cor, 5519)
+HHP_cent_cor_pvalue_corrected <- p.adjust(HHP_cent_cor_pvalue, method = "bonferroni")
+HHP_cent_cor_pvalue_corrected
+
+
+HMP_cen_BC <- HMP_cen[order(HMP_cen$, decreasing = T),]
+HMP_cen_BC <- HMP_cen_BC[1:275,]
+#HMP_cen_all <- data.frame(HMP_cen_BC[1:275,"Gene"])
+HMP_cen_all <- data.frame(rbind(HMP_cen_all, data.frame(HMP_cen_BC[1:275,"Gene"])))
+#HMP_cen_BC$Gene <- substr(HMP_cen_BC$Protein, start = 1, stop = 14)
+HMP_cen_all$Category <- "BC"
+HMP_cen_all[276:550, "Category"] <- "EC"
+HMP_cen_all[551:825, "Category"] <- "DC"
+HMP_cen_all[826:1100, "Category"] <- "CC"
+HMP_cen_all[1101:1375, "Category"] <- "PC"
+
+
+HHP_cen_BC <- HHP_cen[order(HHP_cen$BC, decreasing = T),]
+HHP_cen_BC <- HHP_cen_BC[1:275,]
+HHP_cen_PC <- HHP_cen[order(HHP_cen$PC, decreasing = T),]
+HHP_cen_PC <- HHP_cen_PC[1:275,]
+HHP_cen_EC <- HHP_cen[order(HHP_cen$EC, decreasing = T),]
+HHP_cen_EC <- HHP_cen_EC[1:275,]
+BC_PC <- intersect(HHP_cen_BC$Gene, HHP_cen_PC$Gene)
+BC_PC_EC <- intersect(BC_PC, HHP_cen_EC$Gene)
+BC_PC <- BC_PC[which(BC_PC_EC)]
+BC_PC <- BC_PC[-match(BC_PC_EC, BC_PC)]
+BC_PC_df <- HHP_cen[HHP_cen$Gene %in% BC_PC,]
+BC_EC <- intersect(HHP_cen_BC$Gene, HHP_cen_EC$Gene)
+BC_EC_HHP <- HHP_cen[HHP_cen$Gene %in% BC_EC,]
+
+HHP_cen_all <- data.frame(rbind(HHP_cen_all, data.frame(HHP_cen_BC[1:275,"Gene"])))
+HHP_cen_BC$Gene <- substr(HHP_cen_BC$Protein, start = 1, stop = 14)
+HHP_cen_all$Category <- "BC"
+HHP_cen_all[276:550, "Category"] <- "PC"
+HHP_cen_all[551:825, "Category"] <- "DC"
+HHP_cen_all[826:1100, "Category"] <- "EC"
+HHP_cen_all[1101:1375, "Category"] <- "CC"
+
+ggVennDiagram(list('PageRank' = HMP_cen_all[HMP_cen_all$Category == "PC","Gene"], 'Degree' = HMP_cen_all[HMP_cen_all$Category == "DC", "Gene"], 'Eigenvector' = HMP_cen_all[HMP_cen_all$Category == "EC", "Gene"]), label_alpha = 0, label_size = 4, edge_size = 0, set_size = 4) +
+    scale_fill_gradient(low = "lightblue", high = "orange") +
+  scale_x_continuous(expand = expansion(mult = .2))
+
+ggVennDiagram(list('Betweenness' = HMP_cen_all[HMP_cen_all$Category == "BC", "Gene"], 'Eigenvector' = HMP_cen_all[HMP_cen_all$Category == "EC", "Gene"], 'PageRank' = HMP_cen_all[HMP_cen_all$Category == "PC", "Gene"], 'Degree' = HMP_cen_all[HMP_cen_all$Category == "DC", "Gene"]), label_alpha = 0, label_size = 4, edge_size = 0, set_size = 4) +
+    scale_fill_gradient(low = "lightblue", high = "orange") +
+  scale_x_continuous(expand = expansion(mult = .2))
+
+BC = HHP_cen_all[1:275, "Gene"], 
+'Degree' = HHP_cen_all[551:825, "Gene"]
+
+intersect(HMP_cen_BC$Gene, HHP_cen_BC$Gene)
+
+BC_PC <- HHP_cen[HHP_cen$Gene %in% BC_PC$ ,] 
+
+```
+
+```{r}
+```
+
+
+```{r}
+HMP_cen_BC <- HMP_cen[order(HMP_cen$BC, decreasing = T),]
+HMP_cen_BC <- HHP_cen_BC[1:275,]
+#HHP_cen_PC <- HHP_cen[order(HHP_cen$PC, decreasing = T),]
+#HHP_cen_PC <- HHP_cen_PC[1:275,]
+HMP_cen_EC <- HMP_cen[order(HMP_cen$EC, decreasing = T),]
+HMP_cen_EC <- HMP_cen_EC[1:275,]
+```
+
+
+```{r}
+BC_EC_HMP <- intersect(HMP_cen_BC$Gene, HMP_cen_EC$Gene)
+BC_EC_HMP_all <- HMP_cen[HMP_cen$Gene %in% BC_EC_HMP,]
+
+BC_EC_HHP[BC_EC_HHP$Gene %in% intersect(BC_EC_HHP$Gene, BC_EC_HMP_all$Gene),]
+```
+
+
+

@@ -1,0 +1,68 @@
+---
+title: "Subcell_organelle"
+author: "Bridget Bai"
+date: "2023-05-19"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+#import data
+```{r}
+subcell <- read.csv("~/Downloads/TableS1Subcell.csv")
+
+mito_chloro <- subcell[,c(22:38, 39:65,70)]
+
+mito_chloro[is.na(mito_chloro)] <- 0
+
+
+
+
+
+```
+#Find group leaders
+```{r}
+Group_number <- unique(subcell_NAomit$Group)
+
+subcell$Gene <- substr(subcell$Accession, start = 1, stop = 14)
+subcell$isoform <- gsub(".*P", "", subcell$Accession)
+subcell_protein_2 <- subcell[1,]
+
+subcell_NAomit <- subcell[-which(is.na(subcell$Group)),]
+
+subcell_NAomit <- subcell_NAomit[-grep("reverse",subcell_NAomit$Accession),]
+
+subcell_NAomit <- subcell_NAomit[which(subcell_NAomit$Unique_Peptide >1),]
+```
+
+#Function
+```{r}
+for (i in 1:length(Group_number)){
+  
+  df <- tmt_full[tmt_full$Group == Group_number[i], ]
+  
+  df <- data.frame(df[which(df$Score == max(df$Score)),])
+  
+  df <- data.frame(df[which(df$Protein_Coverage == max(df$Protein_Coverage)),])
+  
+  #df <- data.frame(df[!which(duplicated(df$Gene)),])
+    
+  
+  
+  tmt_full_2 <- rbind(tmt_full_2,df)
+  
+}
+
+```
+
+```{r}
+subcell_normalize <- subcell_protein_2
+subcell_normalize
+```
+
+
+```{r}
+sapply(subcell_protein_2[,22:26], function(x) sd(x, na.rm=T) / mean(x, na.rm=T))
+```
+
