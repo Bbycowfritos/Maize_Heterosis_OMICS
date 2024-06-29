@@ -390,14 +390,26 @@ plot(total_hclust_avg)
 pheatmap(leaf_section_tmt_norm_scale, scale = "none", show_colnames = F)
 
 #normalized tmt
-leaf_section_tmt_norm_scale <- scale(t(leaf_section_tmt_norm[,c(1:2,17,5:6,18,9:10,19,13:14,20)]))
+leaf_section_tmt_norm_scale <- scale(t(leaf_section_tmt_normalized_mat))
+
 colnames(leaf_section_tmt_norm_scale) <- leaf_section_tmt_normalized$Accession
-leaf_section_tmt_norm_scale <- leaf_section_tmt_norm_scale[,-which(leaf_section_tmt_norm_scale[1,] == "NaN")]
+#leaf_section_tmt_norm_scale <- leaf_section_tmt_norm_scale[,-which(leaf_section_tmt_norm_scale[1,] == "NaN")]
+
+
+#hierarchical clustering 
+hc_tmt_norm <- hclust(as.dist(dist(t(leaf_section_tmt_norm_scale), method = "euclidean")), method = "average")
+plot(as.dendrogram(hc_tmt_norm))
+cutree(hc_tmt_norm,k = )
+
+
 
 #total tmt fraction
 total_f_scale <- scale(t(leaf_section_total_fraction))
 
-heat_fraction <- heatmap.2(leaf_section_tmt_norm_scale, scale = "none",dendrogram = "col", Rowv = F, trace = "none", density.info = "none", reorderfun=function(d,w) reorder(d,w,agglo.FUN = mean), col = hcl.colors(12, palette = "Lajolla",alpha = 0.8), labCol = NA, cexRow = 0.8, key.title = "", key.xlab = "", rowsep = c(3,6,9), colsep = c(486,1670,2070, 3568,4177,4621,6324,6828), sepwidth = c(0.3,0.01), sepcolor = "white", lwid = c(1,4.5), lhei = c(1,4))
+heat_fraction <- heatmap.2(leaf_section_tmt_norm_scale, scale = "none",dendrogram = "none", trace = "none", density.info = "none", #reorderfun=function(d,w) reorder(d,w,agglo.FUN = sum), 
+                           col = rev(hcl.colors(13, palette = "ArmyRose",alpha = 1)), labCol = NA, cexRow = 0.8, key.title = "", key.xlab = "", Colv = as.dendrogram(hc_tmt_norm), Rowv = F)
+                           
+                           rowsep = c(3,6,9), colsep = c(486,1670,2070, 3568,4177,4621,6324,6828), sepwidth = c(0.3,0.01), sepcolor = "white", lwid = c(1,4.5), lhei = c(1,4))
 
 leaf_section_total_fraction_thresholded <- t(leaf_section_total_fraction)
 leaf_section_total_fraction_thresholded[leaf_section_total_fraction_thresholded > 0.6] <- 0.6
@@ -431,7 +443,9 @@ frac_cluster_ordered$Gene <- substr(frac_cluster_ordered$Accession, start = 1, s
 set.seed(135)
 km_norm_scale <- kmeans(HMP_matrix[,1:4], centers = 20, nstart = 20, iter.max = 20)
 table(km_norm_scale$cluster)
-    fviz_nbclust(HMP_matrix[,1:4], kmeans, method = "gap_stat")
+    
+fviz_nbclust(t(leaf_section_tmt_norm_scale), kmeans, method = "silhouette")
+
 plot(km_norm_scale$tot.withinss)
 
 #organize by cluster and plot density by genotype
