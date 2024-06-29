@@ -8,6 +8,8 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
+colnames(v4_annot) <- v4_annot[4,]
+v4_annot <- v4_annot[-(1:3),]
 
 ```
 
@@ -32,23 +34,34 @@ leaf_section_tmt_normalized <- leaf_section_tmt_normalized[-grep("reverse",leaf_
 leaf_section_tmt_normalized$Protein <- gsub(".*:","",leaf_section_tmt_normalized$Protein)
 leaf_section_tmt_normalized$Gene <- substr(leaf_section_tmt_normalized$Accession, start = 1, stop = 14)
 
+leaf_section_tmt_normalized_mat <- as.matrix(leaf_section_tmt_normalized[,1:16])
+rownames(leaf_section_tmt_normalized_mat) <- leaf_section_tmt_normalized$Accession
 
+leaf_section_tmt_normalized_mat[,1:16] <- as.numeric(leaf_section_tmt_normalized_mat[,1:16])
 
+leaf_section_tmt_normalized_mat[which(leaf_section_tmt_normalized_mat == 0)] <- NA
+leaf_section_tmt_normalized_mat[which(leaf_section_tmt_normalized_mat < 1)] <- NA
+
+leaf_section_tmt_normalized_mat <- data.frame(na.omit(leaf_section_tmt_normalized_mat))
+leaf_section_tmt_normalized_mat <- leaf_section_tmt_normalized_mat[-which(rownames(leaf_section_tmt_normalized_mat) == ""),]
+
+write.csv(leaf_section_tmt_normalized_mat, "leaf_section_normalized_062724.csv", row.names = T)
 ```
 
 #normalization or not for total tmt
 ```{r}
-tmt_sum_norm <- data.frame(apply(leaf_section_tmt_norm[,c(1:2,5:6, 9:10, 13:14, 17:20)], 2, sum))
-tmt_sum <- data.frame(colSums(leaf_section_tmt_normalized[,1:16]))
-colnames(tmt_sum_norm)[1] <- "sum"
+tmt_sum_norm <- data.frame(apply(leaf_section_tmt_normalized_mat[,1:16], 2, sum))
+tmt_sum <- setNames(data.frame(colSums(leaf_section_tmt_normalized_mat[,1:16])), "sum")
+
 tmt_sum$percentage <- ""
 tmt_sum[1:4, "percentage"] <- tmt_sum[1:4,"sum"]/sum(tmt_sum[1:4,"sum"])
 tmt_sum[5:8, "percentage"] <- tmt_sum[5:8,"sum"]/sum(tmt_sum[5:8,"sum"])
 tmt_sum[9:12, "percentage"] <- tmt_sum[9:12,"sum"]/sum(tmt_sum[9:12,"sum"])
 tmt_sum[13:16, "percentage"] <- tmt_sum[13:16,"sum"]/sum(tmt_sum[13:16,"sum"])
-tmt_sum_norm$section <- rownames(tmt_sum_norm)
+tmt_sum_norm$sample <- rownames(tmt_sum_norm)
+tmt_sum_norm$section <- rep(c("S1","S2","S3","S4"),4)
 
-tmt_sum_norm$genotype <- c(rep("B73", 3), rep("Mo17",3), rep("B73xMo17", 3), rep("acs", 3))
+tmt_sum_norm$genotype <- c(rep("B73", 4), rep("Mo17",4), rep("B73xMo17", 4), rep("acs", 4))
 tmt_sum$percent_accum <- ""
 
 tmt_sum[c(1,5,9,13), "percent_accum"] <- tmt_sum[c(1,5,9,13), "percentage"]
@@ -84,25 +97,34 @@ tmt_sum[5:8,"group"] <- "S2"
 tmt_sum[9:12,"group"] <- "S3"
 tmt_sum[13:16,"group"] <- "S4"
 
-tmt_sum_agg_by_protein <- stack(data.frame(t(leaf_section_tmt_norm[,c(1,2,17,5,6,18,9,10,19,13,14,20)])))
-tmt_sum_agg_by_protein$section <- rep(colnames(leaf_section_tmt_norm[c(1,2,17,5,6,18,9,10,19,13,14,20)]),6828) 
-tmt_sum_agg_by_protein$genotype <- gsub("_.*", "", tmt_sum_agg_by_protein$section)
+tmt_sum_agg_by_protein <- stack(data.frame(t(tmt_sum)))
+tmt_sum_agg_by_protein$genotype <- factor(tmt_sum_agg_by_protein$genotype, levels = c("acs", "B73", "H", "Mo17"))
+tmt_sum_agg_by_protein$ind <- factor(tmt_sum_agg_by_protein$ind, levels = c(sort(as.character(tmt_sum_agg_by_protein$ind))))
+tmt_sum_agg_by_protein <- tmt_sum_agg_by_protein[order(tmt_sum_agg_by_protein$genotype),]
 
-ggplot(tmt_sum_agg_by_protein, aes(x = section, y = values, group = ind, fill = genotype)) +geom_bar(stat = "identity", position = "stack")+
+tmt_sum_agg_by_protein$section <- gsub(".*_", "", tmt_sum_agg_by_protein$ind)
+tmt_sum_agg_by_protein$genotype <- gsub("_.*", "", tmt_sum_agg_by_protein$ind)
+
+ggplot(tmt_sum_agg_by_protein, aes(x = ind, y = values, group = genotype, fill = genotype)) +geom_bar(stat = "identity", position = "dodge", width = 0.7)+
 
   theme_classic()+
- theme(axis.text.x = element_text(size = 8, color = "black", angle = 30, vjust = 0.3, hjust = 0.6), legend.title = element_blank()) +
+ theme(axis.text.x = element_text(size = 9, color = "black", vjust = 1.2, hjust = 0.5), legend.title = element_blank(), axis.ticks.x = element_blank()) +
   #facet_grid(~genotype)
  
   #scale_x_discrete(expand = c(0,0)) +
   scale_y_continuous(expand = c(0,0))+
  ylab("Total protein (e^10)") +
-scale_fill_manual(values = c("B73" = "#66C2A5", "Mo17" = "#8DA0CB", "H" = "#FC8D62", "acs" = "#E78AC3")) +
+scale_fill_manual(values = c("B73" = "#66C2A5", "Mo17" = "#8DA0CB", "H" = "#FC8D62", "acs" = "#E78AC3"),
+                  
+                  labels = c("acs","B73","B73xMo17","Mo17")) +
   xlab("") +
-  theme(legend.box.spacing = unit(0,"mm"), legend.text = element_text(size = 7))
-#  geom_density(stat = "identity", aes(group = genotype), alpha = 0.6, color = "grey10")
+ geom_density(stat = "identity", aes(group = genotype, color = genotype), alpha = 0.7)+ 
+scale_x_discrete(labels = tmt_sum_agg_by_protein$section, name = c("      acs                                 B73                            B73xMo17                          Mo17  ")) +
+  scale_color_manual(values = c("B73" = "#66C2A5", "Mo17" = "#8DA0CB", "H" = "#FC8D62", "acs" = "#E78AC3"))+
+   theme(legend.position = "none")+
+  theme(axis.title.x = element_text(vjust = 1, hjust = 0.4))
 
-tmt_sum_norm$sum <- tmt_sum_norm$sum/1e10
+  tmt_sum_agg_by_protein$values <-   (tmt_sum_agg_by_protein$values)/1e10
 tmt_sum_norm$S <- rep(c("S1","S2","S3","S4"),4)
 
 #sum per gene by genotype
@@ -190,23 +212,32 @@ leaf_section_tmt_norm_S2[,13:16] <- leaf_section_tmt_norm_S2[,13:16]/leaf_sectio
 
 #PCA
 ```{r}
-leaf_section_mat <- leaf_section_tmt_normalized[,1:16]
-rownames(leaf_section_mat) <- leaf_section_tmt_normalized$Accession
+leaf_section_mat <- leaf_section_tmt_normalized_mat
+#rownames(leaf_section_mat) <- normalized_tmt$Accession
 #leaf_section_mat <- leaf_section_mat[,-17]
 
 ##increment by 1
 
-i1 <- which(sapply(leaf_section_mat, is.numeric))
-leaf_section_mat[i1] <- leaf_section_mat[i1] + 1
+#i1 <- which(sapply(leaf_section_mat, is.numeric))
+
+#leaf_section_mat[i1] <- leaf_section_mat[i1] + 1
 
 ##log2 transform
 
-leaf_section_mat <- t(leaf_section_mat)
+leaf_section_mat <- log2(leaf_section_mat)
+#leaf_section_mat <- scale(t(leaf_section_mat))
 
-#leaf_section_6H_mat <- as.numeric(leaf_section_6H_mat)
-leaf_section_mat <- log2(leaf_section_normalize)
 
-res.pca <- prcomp(leaf_section_mat[1:12,])
+res.pca <- prcomp(t(leaf_section_mat))
+
+pca_rotation <- res.pca$rotation
+pca_rotation_hc <- pca_rotation[,1:4]
+section_hclust <- hclust(dist(pca_rotation_hc, method = "manhattan"), method = "ward")
+plot(as.dendrogram(section_hclust))
+
+plot(reorder(as.dendrogram(section_hclust),500:1, agglo.FUN = sum))
+
+
 
 #pca_hub_RNA <- as.data.frame(res.pca$x)
 
@@ -214,34 +245,38 @@ res.pca <- prcomp(leaf_section_mat[1:12,])
 ####screeplot for % variance explained
 screeplot <- fviz_eig(res.pca, choice = "variance", addlabels = T, main = "", xlab = "", barfill = "skyblue", ylab = "% Total Variance", barcolor = "skyblue")
 
-screeplot + scale_x_discrete(labels = c("PC1","PC2","PC3","PC4","PC5","PC6","PC7","PC8","PC9","PC10")) + theme_classic()
+screeplot + scale_x_discrete(labels = c("PC1","PC2","PC3","PC4","PC5","PC6","PC7","PC8","PC9","PC10")) + theme_bw()+
+  theme(panel.grid =  element_blank())
+
+
+fviz_pca_ind(res.pca, axes = c(1,2))
 
 pca_ind <- fviz_pca_ind(res.pca,
              axes = c(1,2), # Color by the quality of representation
              #gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
-             repel = TRUE, labelsize = 3, axes.linetype = NA, geom = "text")   # Avoid text overlapping
-            )
-pca_ind + coord_fixed(xlim = c(-60, 40), ylim = c(-60,40)) + theme_bw() + theme(panel.grid = element_blank())
+             repel = TRUE, labelsize = 2, axes.linetype = NA, geom = "text")   # Avoid text overlapping
+          
+pca_ind + 
+  coord_fixed()+
+  theme_bw() + theme(panel.grid = element_blank())+
+  ggtitle("")
 
 pca_ind_plot <- 
-  fviz_pca_ind(res.pca, axes = c(1,2), habillage = c("B73","B73","B73","B73","Mo17","Mo17","Mo17","Mo17","H","H","H","H","acs","acs","acs","acs"), repel = T, labelsize = 3, col.ind = genotype, addEllipses = T, ellipse.level = 0.7, axes.linetype = NA)
+  fviz_pca_ind(res.pca, axes = c(1,2), habillage = c("B73","B73","B73","B73","Mo17","Mo17","Mo17","Mo17","H","H","H","H","acs","acs","acs","acs"), repel = T, labelsize = 3, axes.linetype = NA)
 
-pca_ind_plot <- fviz_pca_ind(res.pca, axes = c(1,2), habillage = c("B","M1","M2","T","B","M1","M2","T","B","M1","M2","T"), 
-addEllipses = T, ellipse.level = 0.7, labelsize = 3, axes.linetype = NA, ellipse.type = "euclid", geom = "text", repel = T)
-
-pca_ind_plot + theme_bw() + theme(legend.position = "none", panel.grid = element_blank()) +  xlab("PC1 (47.7%)") + ylab("PC2(15.2%)") + ggtitle("") +coord_fixed(xlim = c(-75, 65), ylim = c(-75,65)) +
- # scale_shape_manual(values = c("B" = 19, "M1" = 19, "M2" = 19, "T" = 19))+
-
-
+#pca_ind_plot <- fviz_pca_ind(res.pca, axes = c(1,2), habillage = c("B","M1","M2","T","B","M1","M2","T","B","M1","M2","T"), 
+#addEllipses = F, ellipse.level = 0.7, labelsize = 3, axes.linetype = NA, ellipse.type = "euclid", geom = "text", repel = T)
+pca_ind_plot + theme_bw() + theme(legend.position = "none", panel.grid = element_blank()) +  xlab("PC1 (45.2%)") + ylab("PC2(26.3%)") + ggtitle("") +coord_fixed() +
+ scale_shape_manual(values = c("B73" = 20, "Mo17" = 20, "H" = 20, "acs" = 20))+
 #scale_color_manual(values = c("B73" = "grey20", "Mo17" = "grey20", "H" = "grey20")) 
-  scale_color_manual(values = c("B" = "#4DAF4A", "M1" = "#984EA3", "M2" = "#377EB8", "T" = "#E41A1C"))
+  scale_color_manual(values = c("B73" = "#66C2A5", "Mo17" = "#8DA0CB", "H" = "#FC8D62", "acs" = "#E78AC3"))
 
 ##get contributing variables
 var <- get_pca_var(res.pca)
 var_contrib <- as.data.frame(var$contrib)
 
-colnames(var_contrib_dim1) <- "Accession"
-var_contrib$Protein <- leaf_section[match(rownames(var_contrib),leaf_section$Accession),"Protein"]
+rownames(var_contrib) <- normalized_tmt$Accession
+var_contrib$Protein <- total_tmt[match(rownames(var_contrib),total_tmt$Accession),"Protein"]
 var_contrib$Protein <- gsub(".*:","",var_contrib$Protein)
 
 #get contrib for dim1
@@ -394,9 +429,9 @@ frac_cluster_ordered$Gene <- substr(frac_cluster_ordered$Accession, start = 1, s
 
 #kmeans
 set.seed(135)
-km_norm_scale <- kmeans(leaf_section_tmt_norm[,c(1:2,17, 5:6, 18, 9:10, 19, 13:14, 20)], centers = 10, nstart = 20, iter.max = 20)
+km_norm_scale <- kmeans(HMP_matrix[,1:4], centers = 20, nstart = 20, iter.max = 20)
 table(km_norm_scale$cluster)
-    fviz_nbclust(leaf_section_tmt_norm[,c(1:2,17, 5:6, 18, 9:10, 19, 13:14, 20)], kmeans, method = "silhouette")
+    fviz_nbclust(HMP_matrix[,1:4], kmeans, method = "gap_stat")
 plot(km_norm_scale$tot.withinss)
 
 #organize by cluster and plot density by genotype
@@ -412,23 +447,99 @@ C2_scale_plot[C2_scale_plot$genotype == "Mo17", "col_2"] <- paste0(C2_scale_plot
 C2_scale_plot[C2_scale_plot$genotype == "H", "col_2"] <- paste0(C2_scale_plot[C2_scale_plot$genotype == "B73", "col"], "H")
 C2_scale_plot[C2_scale_plot$genotype == "acs", "col_2"] <- paste0(C2_scale_plot[C2_scale_plot$genotype == "B73", "col"], "acs")
 
-ggplot(C2_scale_plot, aes(y = value, x = row))+ 
-  geom_point(alpha = 0.5, size = 0.1, aes(color = genotype))+
-  geom_line(aes(group = col_2, color = genotype), linewidth = 0.1, alpha = 0.6)+
+TOR_target_stack <- stack(TOR_plot[,6:17])
+TOR_target_stack$Gene <- rep(c("LARP1", "EIF3H","TOR","VLN2","VLN3"), 12)
+TOR_target_stack$Section <- gsub(".*_", "",TOR_target_stack$ind)
+TOR_target_stack$Genotype <- gsub("_.*", "",TOR_target_stack$ind)
+
+plastid_ribo_stack <- stack(plastid_ribo[,9:20])
+plastid_ribo_stack$Accession <- rep(plastid_ribo$Accession, 12)
+plastid_ribo_stack$genotype <- gsub("_.*", "", plastid_ribo_stack$ind)
+plastid_ribo_stack$Accession_2 <- ""
+plastid_ribo_stack$origin <- "NE"
+plastid_ribo_stack[grep("Zema",plastid_ribo_stack$Accession), "origin"] <- "PE"
+
+plastid_ribo_stack[plastid_ribo_stack$genotype == "B73", "Accession_2"] <- paste0(plastid_ribo_stack[plastid_ribo_stack$genotype == "B73", "Accession"], "B73")
+plastid_ribo_stack[plastid_ribo_stack$genotype == "Mo17", "Accession_2"] <- paste0(plastid_ribo_stack[plastid_ribo_stack$genotype == "B73", "Accession"], "Mo17")
+plastid_ribo_stack[plastid_ribo_stack$genotype == "H", "Accession_2"] <- paste0(plastid_ribo_stack[plastid_ribo_stack$genotype == "B73", "Accession"], "H")
+plastid_ribo_stack[plastid_ribo_stack$genotype == "acs", "Accession_2"] <- paste0(plastid_ribo_stack[plastid_ribo_stack$genotype == "B73", "Accession"], "acs")
+
+
+all_plot <- stack(cut_hc_MAN_ordered_HMP[,5:8])
+all_plot$Accession <- rep(rownames(clust_out),4)
+all_plot$colors <- rep(clust_out$Cluster,4)
+all_plot$module <- ""
+
+for(i in 1:nrow(all_plot)){
+ all_plot[i,"module"] <- rownames(ME_values)[match(paste0("ME",all_plot[i,"colors"]),ME_values$color)]
+}
+
+ggplot(C1_plot, aes(y = values, x = ind))+ 
+  geom_point(alpha = 1, size = 0.5, aes(color = module))+
+  geom_line(aes(group = Accession, color = module), linewidth = 0.05)+
   theme_bw()+
   theme(panel.grid = element_blank())+
-  theme(axis.text.x = element_text(size = 0, color = "black", angle = 30, vjust = 0.3, hjust = 0.6), legend.position = "none", axis.ticks.x = element_blank(), axis.title.x = element_text(size = 11, color = "black", hjust = 0.65))+
-  
+  theme(axis.text = element_text(size = 0, color = "black", angle = 30, vjust = 0.3, hjust = 0.6), axis.ticks.y = element_blank(), axis.title.x = element_text(size = 11, color = "black", hjust = 0.65), axis.ticks = element_blank())+
+
+  facet_wrap(~module, scales = c("free_y"))
  
   #scale_x_discrete(expand = c(0,0)) +
   #scale_y_continuous(expand = c(0,0)) +
   #facet_wrap(~genotype, scales = "free_y")
 
-  ylab("") +
-scale_color_manual(values = c("B73" = "#66C2A5", "Mo17" = "#8DA0CB", "H" = "#FC8D62", "acs" = "#E78AC3"), label = c("B73", "Mo17", "Hybrid", "acs mutant")) +
-  xlab(" B73                             Mo17                           B73xMo17                          acs mutant") +
-  theme(legend.box.spacing = unit(0,"mm"), legend.text = element_text(size = 7), plot.title = element_text(size = 12, color = "black", hjust = 0.05, vjust = -8))+
-  ggtitle("Cluster 7")
+  ylab("Protein Abundance") +
+scale_color_manual(values = c("B73B73" = "#66C2A5", "B73B73Mo17" = "#8DA0CB", "B73B73H" = "#FC8D62", "B73B73acs" = "#E78AC3"), label = c("acs mutant", "B73", "Hybrid", "Mo17")) +
+ # xlab(" B73                             Mo17                           B73xMo17                          acs mutant") +
+  theme(legend.box.spacing = unit(0,"mm"), legend.text = element_text(size = 7), plot.title = element_text(size = 12, color = "black", hjust = 0.05, vjust = -8), legend.title = element_blank()) +xlab("")
+  #ggtitle("Cluster 7")
+
+```
+
+#get subset of genes from normalized tmt clusters
+```{r}
+#example cluster 6
+
+TMT_cluster6 <- normalized_tmt_HC_clusters[normalized_tmt_HC_clusters$cluster == 6,]
+
+plastid_ribo <- normalized_tmt_HC_clusters[which(normalized_tmt_HC_clusters$SL_GOIs == "NE plastid ribosome" | normalized_tmt_HC_clusters$SL_GOIs == "PE plastid ribosome"),]
+
+plastid_ribo <- merge.data.frame(plastid_ribo[,2:9], normalized_tmt[,c(1:2,17, 5:6,18, 9:10, 19, 13:14, 20:21)], by = "Accession")
+
+TMT_cluster6 <- merge.data.frame(TMT_cluster6[,2:6], normalized_tmt[,c(1:2,17, 5:6,18, 9:10, 19, 13:14, 20:21)], by = "Accession")
+
+AHP_TMT_cluster6 <- merge.data.frame(AHP_TMT_cluster6, candidates_all, by.x = "Gene", all.x = T)
+
+#get max value for each section
+TMT_cluster6$max_S1 <- ""
+TMT_cluster6$min_S34 <- ""
+TMT_cluster6$min_S2 <- ""
+
+cluster_max_S1 <- pmax(TMT_cluster6$B73_S1, TMT_cluster6$Mo17_S1, TMT_cluster6$H_S1)
+cluster_min_S34 <- pmin(TMT_cluster6$B73_S34, TMT_cluster6$Mo17_S34, TMT_cluster6$H_S34)
+cluster_min_S2 <- pmin(TMT_cluster6$B73_S2, TMT_cluster6$Mo17_S2, TMT_cluster6$H_S2)
+
+for (i in 1:nrow(TMT_cluster6)){
+  TMT_cluster6[i,"max_S1"] <- 
+    colnames(TMT_cluster6)[match(cluster_max_S1[i], TMT_cluster6[i,])]
+}
+
+for (i in 1:nrow(TMT_cluster6)){
+  TMT_cluster6[i,"min_S2"] <- 
+    colnames(TMT_cluster6)[match(cluster_min_S2[i], TMT_cluster6[i,])]
+}
+
+TMT_cluster6 %>% group_by(max_S1, min_S2) %>% tally()
+
+AHP_TMT_cluster6 <- TMT_cluster6[which(TMT_cluster6$max_S1 == "H_S1"),]
+S1_S2_repress <- TMT_cluster6[which(TMT_cluster6$H_S2 < TMT_cluster6$H_S1),]
+S1_S2_repress <- S1_S2_repress[which(S1_S2_repress$B73_S2 > S1_S2_repress$B73_S1),]
+S1_S2_repress <- S1_S2_repress[which(S1_S2_repress$Mo17_S2 > S1_S2_repress$Mo17_S1),]
+
+table(TMT_cluster6$min_S34)
+HMP_categories[HMP_categories$Category == "AHP",]
+
+normalized_tmt_HC_clusters %>% group_by(Pathway, cluster) %>% tally()
+normalized_tmt_HC_clusters %>% group_by(SL_GOIs, cluster) %>% tally()
 ```
 
 #heatmap
@@ -461,7 +572,7 @@ leaf_section_norm_m[c(1,2,5,6,9,10,13,14,17:20),]
 colors = c(-2, -1.5, -1, -0.5 ,0, 0.5, 1, 1.5, 2)
 my_palette <- colorRampPalette(c("beige","#F7F056","darkorange","darkred"))(n = 6)
 
-my_palette <- colorRampPalette(c("darkblue","white","darkred"))(n = 12)
+my_palette <- colorRampPalette(c("darkblue","white","darkred"))(n = 8)
 
 heat_2fold <- heatmap.2(leaf_section_tmt_norm_scale, scale = "none", trace = "none", density.info = "none", labCol = NA,  col = rev(brewer.pal(8,"RdBu")), cexRow = 0.8, lwid = c(1.5,4), lhei = c(1,2.8), key.title = "",breaks = colors, key = "none",
           
@@ -520,7 +631,7 @@ unique(hc_2fold_cluster_ordered)
 
 frac_cluster_ordered %>% group_by(SL_GOIs, cluster) %>% tally()
 
-cluster1 <- frac_cluster_ordered[frac_cluster_ordered$cluster == 1,]
+cluster1 <- normalized_tmt_HC_clusters[normalized_tmt_HC_clusters$cluster == 1,]
 
 cluster2 <- frac_cluster_ordered[frac_cluster_ordered$cluster == 2,]
 
@@ -528,7 +639,8 @@ cluster3 <- frac_cluster_ordered[frac_cluster_ordered$cluster == 3,]
 
 cluster4 <- frac_cluster_ordered[frac_cluster_ordered$cluster == 4,]
 
-cluster5 <- frac_cluster_ordered[frac_cluster_ordered$cluster == 5,]
+cluster5 <- normalized_tmt_HC_clusters[normalized_tmt_HC_clusters$cluster == 5,]
+cluster5_tmt <- merge.data.frame(cluster5, normalized_tmt, by = "Accession")
 
 cluster6 <- frac_cluster_ordered[frac_cluster_ordered$cluster == 6,]
 
@@ -551,7 +663,7 @@ gamer <- GAMER[-(1:2),]
 
 gamer$Term <- Term(as.character(gamer$term_accession))
 
-gamercut <- gamer[gamer$db_object_id %in% leaf_section_total_tmt$Gene, ]
+gamercut <- gamer[gamer$db_object_id %in% total_tmt$Gene, ]
 ```
 
 
@@ -585,7 +697,7 @@ resultKS <- getSigGroups(GOdata, test.statKS)
 test.statRW <- new("weightCount", testStatistic = GOFisherTest, name = "Fisher test", sigRatio = "ratio")
 resultWeight <- getSigGroups(GOdata, test.statRW)
 
-GO_DF <- GenTable(GOdata, classic = resultFisher, KS = resultKS, weight = resultWeight, orderBy = "classic", ranksOf = "classic", topNodes = 15)
+GO_DF <- GenTable(GOdata, classic = resultFisher, KS = resultKS, weight = resultWeight, orderBy = "classic", ranksOf = "classic", topNodes = 10)
 
 GO_DF$Ontology <- ont[n]
 GO_DF$classic_num <- as.numeric(as.character(GO_DF$classic))
@@ -602,15 +714,37 @@ merged_GO <- rbind(GO_DF,merged_GO)
 
 #GO enrichment for clusters
 ```{r}
-cluster1_GO <- cluster_GO_enrichemnt(df = cluster1, gamer_cut = gamercut, nodesize = 1)
-cluster2_GO <- cluster_GO_enrichemnt(df = cluster2, gamer_cut = gamercut, nodesize = 1)
-cluster3_GO <- cluster_GO_enrichemnt(df = cluster3, gamer_cut = gamercut, nodesize = 1)
-cluster4_GO <- cluster_GO_enrichemnt(df = cluster4, gamer_cut = gamercut, nodesize = 1)
-cluster6_GO <- cluster_GO_enrichemnt(df = cluster6, gamer_cut = gamercut, nodesize = 1)
-cluster5_GO <- cluster_GO_enrichemnt(df = cluster5, gamer_cut = gamercut, nodesize = 1)
-cluster7_GO <- cluster_GO_enrichemnt(df = cluster7, gamer_cut = gamercut, nodesize = 1)
-cluster8_GO <- cluster_GO_enrichemnt(df = cluster8, gamer_cut = gamercut, nodesize = 1)
+knitr::opts_chunk$set(echo = F)
 
+cluster18_GO <- cluster_GO_enrichemnt(df = Cluster_18, gamer_cut = gamercut, nodesize = 1)
+cluster9_GO <- cluster_GO_enrichemnt(df = Cluster_9, gamer_cut = gamercut, nodesize = 1)
+cluster3_GO <- cluster_GO_enrichemnt(df = Cluster_3, gamer_cut = gamercut, nodesize = 1)
+cluster23_GO <- cluster_GO_enrichemnt(df = Cluster_23, gamer_cut = gamercut, nodesize = 1)
+cluster8_GO <- cluster_GO_enrichemnt(df = Cluster_8, gamer_cut = gamercut, nodesize = 1)
+#cluster1_GO <- cluster_GO_enrichemnt(df = Cluster_1, gamer_cut = gamercut, nodesize = 1)
+cluster12_GO <- cluster_GO_enrichemnt(df = Cluster_12, gamer_cut = gamercut, nodesize = 1)
+cluster19_GO <- cluster_GO_enrichemnt(df = Cluster_19, gamer_cut = gamercut, nodesize = 1)
+
+
+cluster14_GO <- cluster_GO_enrichemnt(df = Cluster_14, gamer_cut = gamercut, nodesize = 1)
+cluster15_GO <- cluster_GO_enrichemnt(df = Cluster_15, gamer_cut = gamercut, nodesize = 1)
+cluster17_GO <- cluster_GO_enrichemnt(df = Cluster_17, gamer_cut = gamercut, nodesize = 1)
+cluster24_GO <- cluster_GO_enrichemnt(df = Cluster_24, gamer_cut = gamercut, nodesize = 1)
+cluster25_GO <- cluster_GO_enrichemnt(df = Cluster_25, gamer_cut = gamercut, nodesize = 1)
+
+
+cluster2_GO <- cluster_GO_enrichemnt(df = Cluster_2, gamer_cut = gamercut, nodesize = 1)
+cluster4_GO <- cluster_GO_enrichemnt(df = Cluster_4, gamer_cut = gamercut, nodesize = 1)
+cluster5_GO <- cluster_GO_enrichemnt(df = Cluster_5, gamer_cut = gamercut, nodesize = 1)
+cluster6_GO <- cluster_GO_enrichemnt(df = Cluster_6, gamer_cut = gamercut, nodesize = 1)
+cluster7_GO <- cluster_GO_enrichemnt(df = Cluster_7, gamer_cut = gamercut, nodesize = 1)
+cluster10_GO <- cluster_GO_enrichemnt(df = Cluster_10, gamer_cut = gamercut, nodesize = 1)
+cluster11_GO <- cluster_GO_enrichemnt(df = Cluster_11, gamer_cut = gamercut, nodesize = 1)
+cluster13_GO <- cluster_GO_enrichemnt(df = Cluster_13, gamer_cut = gamercut, nodesize = 1)
+cluster16_GO <- cluster_GO_enrichemnt(df = Cluster_16, gamer_cut = gamercut, nodesize = 1)
+cluster20_GO <- cluster_GO_enrichemnt(df = Cluster_20, gamer_cut = gamercut, nodesize = 1)
+cluster21_GO <- cluster_GO_enrichemnt(df = Cluster_21, gamer_cut = gamercut, nodesize = 1)
+cluster22_GO <- cluster_GO_enrichemnt(df = Cluster_22, gamer_cut = gamercut, nodesize = 1)
 ```
 
 
@@ -621,7 +755,7 @@ cluster8_GO <- cluster_GO_enrichemnt(df = cluster8, gamer_cut = gamercut, nodesi
 hc_2fold_cluster$SL_GOIs <- SL_GOIs[match(hc_2fold_cluster$Gene, SL_GOIs$Gene), "Category"]
 hc_2fold_cluster$complex <- complex[match(hc_2fold_cluster$Gene, complex$v4_gene_model), "complex_label"]
 
-candidates_all <- read.csv("candidate_gene.csv", stringsAsFactors = F, header = T)
+candidates_all <- read.csv("~/Desktop/Lab/Regulator story/test_candidate_gene/candidate_gene.csv", stringsAsFactors = F, header = T)
 cyto_mito_candidates <- read.csv("cyto_mito_proteostasis_candidates.csv", stringsAsFactors = F, header = T)
 
 
@@ -638,16 +772,27 @@ plastid_ribo_ratio_m <- as.matrix(Plastid_ribo_ratio[,2:13])
 rownames(plastid_ribo_ratio_m) <- Plastid_ribo_ratio$Accession
 plastid_ribo_ratio_m <- log2(plastid_ribo_ratio_m)
 
-Plastid_ribo_leaf_section <- leaf_section[which(leaf_section$Accession %in% Plastid_ribo$Accession),]
-plastid_ribo_section_m <- as.matrix(Plastid_ribo_leaf_section[,1:12])
+Plastid_ribo_leaf_section <- total_tmt[which(total_tmt$Accession %in% Plastid_ribo$Accession),]
+Plastid_ribo_leaf_section <- HMP_matrix[which(HMP_matrix$Gene %in% Plastid_ribo$Gene),]
 rownames(plastid_ribo_section_m) <- Plastid_ribo_ratio$Accession
+Plastid_ribo_leaf_section$Type <- "NE"
+Plastid_ribo_leaf_section[rownames(Plastid_ribo_leaf_section) %in% TOR, "Type"] <- "TOR"
+Plastid_ribo_leaf_section[grep("Zema", Plastid_ribo_leaf_section$Gene), "Type"] <- "PE"
+
+Pribo_HMP_plot <- stack(Plastid_ribo_leaf_section[,1:3])
+Pribo_HMP_plot$Accession <- rep(rownames(Plastid_ribo_leaf_section),3)
+Pribo_HMP_plot$Type <- rep(Plastid_ribo_leaf_section$Type,3)
+
+
 
 
 PHANPG <- SL_GOIs[grep("Ph", SL_GOIs$Category),]
-PHANPG_ratio <- leaf_section_ratio[leaf_section_ratio$Gene %in% tetraprrole$Gene,]
-PHANPG_ratio_m <- as.matrix(PHANPG_ratio[,2:13])
-rownames(PHANPG_ratio_m) <- PHANPG_ratio$Accession
-PHANPG_ratio_m <- log2(PHANPG_ratio_m)
+PHANPG_norm <- normalized_tmt[normalized_tmt$Accession %in% PHANPG$Accession,]
+PHANPG_HMP <- HMP_matrix[HMP_matrix$Gene %in% PHANPG$Gene,]
+PHANPG_HMP_plot <- stack(PHANPG_HMP[,1:3])
+PHANPG_HMP_plot$Accession <- rep(rownames(PHANPG_HMP),3)
+PHANPG_HMP_plot$origin <- "NE"
+PHANPG_HMP_plot[grep("Zema",PHANPG_HMP_plot$Accession),"origin"] <- "PE"
 
 PHANPG_ratio_m[PHANPG_ratio_m >2] <- 2
 PHANPG_ratio_m[PHANPG_ratio_m < -2] <- -2
@@ -702,10 +847,24 @@ nrow(data.frame(leaf_section_proteostasis$annotation))
 
 #calculate hybrid over MP
 ```{r}
-total_hmp <- leaf_section_total_tmt[,1:18]
+total_hmp <- leaf_section_tmt_norm
 total_hmp_saved <- total_hmp
 total_hmp <- leaf_section_tmt_norm
-normalized_hmp <- leaf_section_tmt_norm
+
+
+
+normalized_HMP <- data.frame(matrix(data = NA, nrow = NROW(normalized_tmt)))
+
+normalized_HMP <- normalized_HMP[-which(rownames(normalized_HMP) == "Zm00001d029233_T001"),]
+
+
+normalized_HMP <- setNames(data.frame(cbind(
+  normalized_tmt$H_S1/rowMeans(normalized_tmt[,c("B73_S1","Mo17_S1")]), normalized_tmt$H_S2/rowMeans(normalized_tmt[,c("B73_S2","Mo17_S2")]), 
+ normalized_tmt$H_S3/rowMeans(normalized_tmt[,c("B73_S3","Mo17_S3")]), normalized_tmt$H_S4/rowMeans(normalized_tmt[,c("B73_S4","Mo17_S4")]))), 
+ c("S1","S2","S3","S4"))
+
+rownames(normalized_HMP) <- total_tmt$Accession
+
 
 
 #combine S3 and S4
@@ -715,9 +874,16 @@ total_hmp$H_S34 <- rowSums(total_hmp[,c("H_S3","H_S4")])
 total_hmp$acs_S34 <- rowSums(total_hmp[,c("acs_S3","acs_S4")])
 
 #calculate HMP
-total_hmp$S1_HMP <- log2(total_hmp$H_S1/rowMeans(total_hmp[,c("B73_S1","Mo17_S1")]))
-total_hmp$S2_HMP <- log2(total_hmp$H_S2/rowMeans(total_hmp[,c("B73_S2","Mo17_S2")]))
-total_hmp$S34_HMP <- log2(total_hmp$H_S34/rowMeans(total_hmp[,c("B73_S34","Mo17_S34")]))
+
+
+normalized_HMP$S1_HMP <-normalized_HMP$H_S1/rowMeans(normalized_HMP[,c("B73_S1","Mo17_S1")])
+normalized_HMP$S2_HMP <-normalized_HMP$H_S2/rowMeans(normalized_HMP[,c("B73_S2","Mo17_S2")])
+normalized_HMP$S3_HMP <- normalized_HMP$H_S34/rowMeans(normalized_HMP[,c("B73_S3","Mo17_S3")])
+normalized_HMP$S4_HMP <- normalized_HMP$H_S34/rowMeans(normalized_HMP[,c("B73_S4","Mo17_S4")])
+
+total_hmp$l2_S1_HMP <- log2(total_hmp$H_S1/rowMeans(total_hmp[,c("B73_S1","Mo17_S1")]))
+total_hmp$l2_S2_HMP <- log2(total_hmp$H_S2/rowMeans(total_hmp[,c("B73_S2","Mo17_S2")]))
+total_hmp$l2_S34_HMP <- log2(total_hmp$H_S34/rowMeans(total_hmp[,c("B73_S34","Mo17_S34")]))
 
 
 
@@ -873,11 +1039,9 @@ normalized_count$sample <- paste(normalized_count$section, normalized_count$data
 
 
 
-
-
 ggplot(normalized_count, aes(data_type, Count, fill = Category)) +
 
- geom_bar(alpha = 0.8,stat = "identity", position = "stack") +
+ geom_bar(alpha = 0.9,stat = "identity", position = "stack") +
   
 
  scale_fill_manual(values = c("B73" ="peachpuff", "Mo17" = "rosybrown", "Additive" = "gray60", "AHP" = "maroon", "PD-H/HP"= "darkorange","BLP" = "midnightblue", "PD-L/LP" = "darkolivegreen"), labels = c("Additive", "AHP","BLP","PD-H","PD-L","B73-HP", "Mo17-HP")) +
@@ -891,11 +1055,95 @@ ggplot(normalized_count, aes(data_type, Count, fill = Category)) +
   facet_wrap(~section, scales = "free_x") +
   xlab("") +
   ylab("Protein Count") +
-  theme(legend.title = element_blank(), axis.text.x = element_text(size = 10, color = "black"), axis.ticks = element_blank(), legend.text = element_text(size = 7, color = "black"), legend.box.spacing = unit(0,"mm"))
+  theme(legend.title = element_blank(), axis.text = element_text(size = 10, color = "black"), axis.ticks = element_blank(), legend.text = element_text(size = 8, color = "black"), legend.box.spacing = unit(0,"mm"), strip.text = element_text(size = 11, color = "black"))
   #
   #scale_fill_manual(values = c("Additive" = "lightyellow", "AHP" = "darkred", "BLP" = "#395586", "PD-H/HP" = "#F7F056", "PD-L/LP" = "#68AC20", "B73" = "#66C2A5", "Mo17" = "salmon")) + theme_bw()
 ```
 
+#barplot for HMP distribution
+```{r}
+#2fold
+barplot_HMP_dis <- abs(log2(HMP_matrix[,1:4])) >= log2(2)
+
+#increase/decrease by 2 fold
+barplot_HMP_dis <- log2(HMP_matrix[,1:4]) > log2(2)
+barplot_count_HMP <- rbind(barplot_count_HMP, t(setNames(data.frame(colSums(barplot_HMP_dis)),"2f")))
+barplot_HMP_dis <- log2(HMP_matrix[,1:4]) < log2(0.5)
+barplot_count_HMP <- rbind(barplot_count_HMP, t(setNames(data.frame(colSums(barplot_HMP_dis)),"half")))
+
+
+#increase/decrease by 0.75 1.75; 4/7
+barplot_HMP_dis <- log2(HMP_matrix[,1:4]) > log2(1.75)
+barplot_count_HMP <- rbind(barplot_count_HMP, t(setNames(data.frame(colSums(barplot_HMP_dis)),"+75%")))
+barplot_HMP_dis <- log2(HMP_matrix[,1:4]) < log2(4/7)
+barplot_count_HMP <- rbind(barplot_count_HMP, t(setNames(data.frame(colSums(barplot_HMP_dis)),"-75%")))
+
+
+#increase/decrease by 0.6, 1.6; 0.625
+barplot_HMP_dis <- log2(HMP_matrix[,1:4]) > log2(1.6)
+barplot_count_HMP <- rbind(barplot_count_HMP, t(setNames(data.frame(colSums(barplot_HMP_dis)),"+60%")))
+barplot_HMP_dis <- log2(HMP_matrix[,1:4]) < log2(0.625)
+barplot_count_HMP <- rbind(barplot_count_HMP, t(setNames(data.frame(colSums(barplot_HMP_dis)),"-60%")))
+
+#increase/decrease by 0.5, 1.5; 2/3
+barplot_HMP_dis <- log2(HMP_matrix[,1:4]) > log2(1.5)
+barplot_count_HMP <- rbind(barplot_count_HMP, t(setNames(data.frame(colSums(barplot_HMP_dis)),"+50%")))
+barplot_HMP_dis <- log2(HMP_matrix[,1:4]) < log2(2/3)
+barplot_count_HMP <- rbind(barplot_count_HMP, t(setNames(data.frame(colSums(barplot_HMP_dis)),"-50%")))
+
+#increase/decrease by 0.4, 1.4; 5/7
+barplot_HMP_dis <- log2(HMP_matrix[,1:4]) > log2(1.4)
+barplot_count_HMP <- rbind(barplot_count_HMP, t(setNames(data.frame(colSums(barplot_HMP_dis)),"+40%")))
+barplot_HMP_dis <- log2(HMP_matrix[,1:4]) < log2(5/7)
+barplot_count_HMP <- rbind(barplot_count_HMP, t(setNames(data.frame(colSums(barplot_HMP_dis)),"-40%")))
+
+#increase/decrease by 0.25 1.25 0.8
+barplot_HMP_dis <- log2(HMP_matrix[,1:4]) > log2(1.25)
+barplot_count_HMP <- rbind(barplot_count_HMP, t(setNames(data.frame(colSums(barplot_HMP_dis)),"+25%")))
+barplot_HMP_dis <- log2(HMP_matrix[,1:4]) < log2(0.8)
+barplot_count_HMP <- rbind(barplot_count_HMP, t(setNames(data.frame(colSums(barplot_HMP_dis)),"-25%")))
+
+#increase/decrease by 0.15 1.15 ~0.87
+barplot_HMP_dis <- log2(HMP_matrix[,1:4]) > log2(1.15)
+barplot_count_HMP <- t(setNames(data.frame(colSums(barplot_HMP_dis)),"+15%"))
+barplot_HMP_dis <- log2(HMP_matrix[,1:4]) < log2(20/23)
+barplot_count_HMP <- rbind(barplot_count_HMP, t(setNames(data.frame(colSums(barplot_HMP_dis)),"-15%")))
+
+#Additive
+barplot_count_HMP_2 <- rbind(barplot_count_HMP_2, t(setNames(data.frame(6828- colSums(barplot_count_HMP_2)
+),"Additive")))
+
+barplot_count_HMP_plot <- data.frame(stack(barplot_count_HMP))
+barplot_count_HMP_plot_2$row <- factor(barplot_count_HMP_plot_2$row, levels = c("2f","+50%",  "+25%", "+15%", "Additive", "-15%", "-25%","-50%", "half"))
+
+barplot_count_HMP_2 <- barplot_count_HMP[c(1,2,3,4,7,8,11:15),]
+barplot_count_HMP_plot_2 <- data.frame(stack(barplot_count_HMP_2))
+
+ggplot(barplot_count_HMP_plot_2, aes(col, value, fill = row)) + geom_bar(stat = "identity", position = "stack", width = 0.8) +
+  theme_bw() +
+  theme(panel.grid = element_blank()) +
+  ylab("Protein Count") +
+  xlab("") +
+  scale_x_discrete() +
+  scale_y_continuous(expand = c(0,0.5)) +
+  scale_fill_manual(values = c("Additive" = "beige", "-15%" = "#AEE4C1", "-25%" = "#65CCB3", 
+                              # "-40%" = "#65CCB3", 
+                               "-50%" = "#005D9E", 
+                               #"-60%" = "#0088B1",DAAE6D
+                              # "-75%" = "#005D9E", 
+                              "half" = "#26185F", "+15%" = "#FFCB9C", "+25%" = "#E54924", 
+                               #"+40%" = "#F3B96A", 
+                               "+50%" = "#B91832", 
+                               #"+60%" = "#D27756", 
+                               #"+75%" = "#B91832", 
+                              "2f" = "#88002D")) +
+  geom_text(stat = "identity", position = position_stack(vjust = 0.5), aes(label = label_bar_2), size = 2.5)+
+  theme(legend.position = "none", axis.ticks.x = element_blank(), axis.text= element_text(size = 10, color = "black"))
+
+label_bar_2 <- rep(c("+15%"   ,  "-15%"  ,   "+25%"  ,   "-25%", "","","","",  "Additive"),4)
+label_bar_2
+
+```
 
 
 #Venn diagram/alluvial plot for HMP values
@@ -972,11 +1220,30 @@ Nonadd_S1_N <- rownames(normalized_hmp_1[which(normalized_hmp_1$Category == "BLP
 Nonadd_S2_N <- rownames(normalized_hmp_2[which(normalized_hmp_2$Category == "BLP" | normalized_hmp_2$Category == "PD-L/LP"), ])
 Nonadd_S34_N <- rownames(normalized_hmp_34[which(normalized_hmp_34$Category == "BLP" | normalized_hmp_34$Category == "PD-L/LP"), ])
 
+S1_Nonadd_p <- rownames(HMP_matrix[which(HMP_matrix$S1_HMP > 1.15),])
+S1_Nonadd_N <- rownames(HMP_matrix[which(HMP_matrix$S1_HMP < 20/23),])
+S2_Nonadd_p <- rownames(HMP_matrix[which(HMP_matrix$S2_HMP > 1.15),])
+S2_Nonadd_N <- rownames(HMP_matrix[which(HMP_matrix$S2_HMP < 20/23),])
+S3_Nonadd_p <- rownames(HMP_matrix[which(HMP_matrix$S3_HMP > 1.15),])
+S3_Nonadd_N <- rownames(HMP_matrix[which(HMP_matrix$S3_HMP < 20/23),])
+S4_Nonadd_p <- rownames(HMP_matrix[which(HMP_matrix$S4_HMP > 1.15),])
+S4_Nonadd_N <- rownames(HMP_matrix[which(HMP_matrix$S4_HMP < 20/23),])
+S3_Nonadd <- c(S3_Nonadd_N, S3_Nonadd_p)
+
+S1_ADD <- rownames(HMP_matrix[which(HMP_matrix$S1_HMP < 1.15 & HMP_matrix$S1_HMP > 20/23),])
+S2_ADD <- rownames(HMP_matrix[which(HMP_matrix$S2_HMP < 1.15 & HMP_matrix$S2_HMP > 20/23),])
+S3_ADD <- rownames(HMP_matrix[which(HMP_matrix$S3_HMP < 1.15 & HMP_matrix$S3_HMP > 20/23),])
+S4_ADD <- rownames(HMP_matrix[which(HMP_matrix$S4_HMP < 1.15 & HMP_matrix$S4_HMP > 20/23),])
+
 
 Nonadd_list <- list(S1_AMP = Nonadd_S1_P, S2_AMP = Nonadd_S2_P, S34_AMP = Nonadd_S34_P, S1_BMP = Nonadd_S1_N, S2_BMP = Nonadd_S2_N, S34_BMP = Nonadd_S34_N)
 
-ggVennDiagram(Nonadd_list_all,set_color = "black", label_alpha = 0, label_color = "black", set_size = 5, edge_size = 0.5,label_size = 4, category.names = c("S1","S2","S3/4")) +scale_fill_gradient(low = "white", high = "grey50") +
-  scale_color_manual(values = c("S1" = "black", "S2" = "black", "S34" = "black")) + theme(legend.position = "bottom", legend.text = element_text(size = 8, color = "black"), strip.text = element_text(color = "black", hjust = -5), legend.title = element_blank()) 
+NAdd_list <- list(S1_Nonadd, S4_Nonadd, S2_Nonadd, S3_Nonadd)
+
+ggVennDiagram(NAdd_list,set_color = "black", label_alpha = 0, label_color = c(rep("black",4), rep(NA,2), "black", rep(NA,7),"black") , set_size = 5, edge_size = 0.5,label_size = 4,
+              category.names = c("S1","S2","S3","S4")) +
+  scale_fill_gradient(low = "#FCFFC9", high = "#C6622A") +
+  scale_color_manual(values = c("S1" = "black", "S2" = "black", "S34" = "black", "S4" = "black")) + theme(legend.position = "bottom", legend.text = element_text(size = 8, color = "black"), strip.text = element_text(color = "black", hjust = -5), legend.title = element_blank()) 
 
 Nonadd_intersection_S12 <- intersect(Nonadd_S1, Nonadd_S2)
 Nonadd_intersection_all <- intersect(Nonadd_intersection_S12, Nonadd_S3)
@@ -994,13 +1261,12 @@ Alluvial_plot$S2_Category <- factor(Alluvial_plot$S2_Category, levels = c("PD-L/
 Alluvial_plot$S34_Category <- factor(Alluvial_plot$S34_Category, levels = c("PD-L/LP", "BLP","AHP", "PD-H/HP"))
   
 
-ggplot(Alluvial_plot, aes(y = n, axis1 = S1_Category, axis2 = S2_Category, axis3 = S34_Category)) + geom_alluvium() +
+ggplot(test, aes(y = n, axis1 = S1, axis2 = S2, axis3 = `S3/4`)) + geom_alluvium() +
   geom_stratum(alpha = 0.25, width = 1/8) +
   geom_label(stat = "stratum", aes(label = after_stat(stratum)), size = 1) +
   theme_classic()+
   theme(text = element_text(size = 2))+
-  coord_flip()+ 
-  geom_para
+  coord_flip()
 
 
 #Venn N.2
@@ -1016,14 +1282,588 @@ Nonadd_intersect_list <- list(
 ggVennDiagram(Nonadd_intersect_list,set_color = "black", label_alpha = 0, label_color = "black", set_size = 3, edge_size = 0.5,label_size = 3, label = "count") +scale_fill_continuous(type = "viridis", option = "F", alpha = 0.7, begin = 0.3, end = 1, direction = -1) +
   scale_color_manual(values = c("S1" = "grey40", "S2" = "grey40", "S34" = "grey40")) + theme(legend.position = "bottom", legend.text = element_text(size = 6), legend.title = element_text(size = 6)) 
 
+
+
+#parallel set
+HMP_categories_allsection$Category.2 <- gsub("PD-L/LP", "PD-L", HMP_categories_allsection$Category.2)
+HMP_categories_allsection$Category.2 <- gsub("PD-H/HP", "PD-H", HMP_categories_allsection$Category.2)
+
+
+  HMP_categories_all[,i] <- setNames(HMP_categories_allsection[,c(10,20,30)],c("S1","S2","S3/4"))
+  HMP_categories_all[,i]$Accession <- rownames(  HMP_categories_all[,i])
+
+for (i in 1:3){
+    HMP_categories_all[,i] <- gsub("AHP","AHP & PD-HP",   HMP_categories_all[,i])
+  HMP_categories_all[,i] <- gsub("PD-H/HP","AHP & PD-HP",   HMP_categories_all[,i])
+  HMP_categories_all[,i]<- gsub("BLP","BLP & PD-LP",   HMP_categories_all[,i])
+  HMP_categories_all[,i] <- gsub("PD-L/LP","BLP & PD-LP",   HMP_categories_all[,i])
+}
+  
+table(test$y)
+test <- reshape2::melt(HMP_categories_all)
+test <- HMP_categories_all %>% group_by(S1,S2,`S3/4`) %>% tally()
+test <- gather_set_data(test,1:3)
+test$Category <- "Other"
+
+for (i in 1:6828){
+  protein_trend <- test[test$id == i, ]
+  if (sum(protein_trend[1,1:3] == "Additive") == 3){
+    test[which(test$id == i),"Category"] <- "Unchanged - Additive"
+    
+  }else if (sum(protein_trend[1,1:3] == "BLP & PD-LP") == 3){
+   test[which(test$id == i),"Category"] <- "Unchanged - Negative Nonadditive"
+  } else if (sum(protein_trend[1, 1:3] == "AHP & PD-HP") == 3){
+   test[which(test$id == i),"Category"] <- "Unchanged - Positive Nonadditive"
+    
+  }else if(sum(protein_trend[1,1:2] == "BLP & PD-LP") == 2 & protein_trend[1,3] == "AHP & PD-HP"){
+    test[which(test$id == i),"Category"] <- "off-off-on"
+  }else if(sum(protein_trend[1,1:2] == "AHP & PD-HP") ==2 & protein_trend[1,3] == "BLP & PD-LP"){
+    test[which(test$id == i),"Category"] <- "on-on-off"
+  }else if(sum(protein_trend[1,2:3] == "BLP & PD-LP") == 2 & protein_trend[1,1]  == "AHP & PD-HP"){
+    test[which(test$id == i),"Category"] <- "on-off-off"
+  }else if(sum(protein_trend[1,2:3] == "AHP & PD-HP") ==2 & protein_trend[1,1] == "BLP & PD-LP"){
+    test[which(test$id == i),"Category"] <- "off-on-on"
+  }else if(sum(protein_trend[1,c(1,3)] == "AHP & PD-HP") ==2 & protein_trend[1,2] == "BLP & PD-LP"){
+    test[which(test$id == i),"Category"] <- "on-off-on"
+  }else if(sum(protein_trend[1,c(1,3)] == "BLP & PD-LP") ==2 & protein_trend[1,2]  == "AHP & PD-HP"){
+    test[which(test$id == i),"Category"] <- "off-on-off"
+  }
+}
+
+Nonadd_switch <- test[test$Category == "Nonadditive-switched",]
+Nonadd_switch %>% group_by(S1,S2,`S3/4`) %>% tally()
+
+
+Nonadd_switch$Category_2 <- "Other"
+Nonadd_switch$Category_3 <- "Other"
+
+#no dramatic change 
+Nonadd_switch[which(Nonadd_switch$S2 == "Additive" & Nonadd_switch$`S3/4` == "Additive"), "Category"] <- "S1_specific"
+Nonadd_switch[which(Nonadd_switch$S1 == "Additive" & Nonadd_switch$`S3/4` == "Additive"), "Category"] <- "S2_specific"
+Nonadd_switch[which(Nonadd_switch$S1 == "Additive" & Nonadd_switch$S2 == "Additive"), "Category"] <- "S34_specific"
+
+
+#dramatic change
+##S1-S2
+Nonadd_switch[which(Nonadd_switch$S1 %in% c("AHP", "PD-H/HP") & Nonadd_switch$S2 %in% c("BLP","PD-L/LP")), "Category_2"] <- "on-off"
+Nonadd_switch[which(Nonadd_switch$S1 %in% c("BLP", "PD-L/LP") & Nonadd_switch$S2 %in% c("AHP","PD-H/HP")), "Category_2"] <- "off-on"
+Nonadd_switch[which(Nonadd_switch$S1 %in% c("BLP", "PD-L/LP") & Nonadd_switch$S2 %in% c("BLP","PD-L/LP")), "Category_2"] <- "off-off"
+Nonadd_switch[which(Nonadd_switch$S1 %in% c("AHP", "PD-H/HP") & Nonadd_switch$S2 %in% c("AHP","PD-H/HP")), "Category_2"] <- "on-on"
+
+##S2-S3
+Nonadd_switch[which(Nonadd_switch$Category_2 == "on-off" & Nonadd_switch$S3 %in% c("BLP","PD-L/LP")), "Category_3"] <- "on-off-off"
+Nonadd_switch[which(Nonadd_switch$Category_2 == "on-off" & Nonadd_switch$S3 %in% c("AHP","PD-H/HP")), "Category_3"] <- "on-off-on"
+Nonadd_switch[which(Nonadd_switch$Category_2 == "off-on" & Nonadd_switch$S3 %in% c("AHP","PD-H/HP")), "Category_3"] <- "off-on-on"
+Nonadd_switch[which(Nonadd_switch$Category_2 == "off-on" & Nonadd_switch$S3 %in% c("BLP","PD-L/LP")), "Category_3"] <- "off-on-off"
+Nonadd_switch[which(Nonadd_switch$Category_2 == "on-on" & Nonadd_switch$S3 %in% c("BLP","PD-L/LP")), "Category_3"] <- "on-on-off"
+Nonadd_switch[which(Nonadd_switch$Category_2 == "off-off" & Nonadd_switch$S3 %in% c("AHP","PD-H/HP")), "Category_3"] <- "off-off-on"
+
+
+test[test$Category == "Other",]
+
+test$y <- factor(test$y, levels = c("AHP & PD-HP","Additive","BLP & PD-LP"))
+test$y <- factor(test$y, levels = c("BLP & PD-LP","Additive","AHP & PD-HP"))
+test$x1 <- paste0("S",test$x)
+
+ggplot(test, aes(x1, id = id, split = y, value = n)) +
+  geom_parallel_sets(alpha = 0.3, axis.width = 0.01, orientation = "x") +
+  geom_parallel_sets_axes(axis.width = 0.1, aes(fill = y)) +
+  geom_parallel_sets_labels(colour = 'white', angle = 90, nudge_x = 0, size = 2.5)+
+  theme_bw() +
+  scale_fill_manual(values = c("Additive" = "gray50", "AHP & PD-HP" = "maroon", "BLP & PD-LP" = "darkslateblue")) +
+  theme(legend.position = "none", axis.title.x = element_blank(), axis.ticks.x = element_blank(),panel.grid = element_blank())+
+ scale_x_discrete(expand = c(0.05,0))
+
+
+  scale_fill_manual(values = c("Other" = "gray60", "Unchanged - Additive" = "lightgreen", "Unchanged - Negative Nonadditive" = "lightblue", "Unchanged - Positive Nonadditive" = "lightyellow", "off-off-on" = "orange", "off-on-on" = "darkred", "off-on-off" = "slateblue", "on-off-off"= "darkblue", "on-on-off" = "royalblue",  "on-off-on" = "pink"))
 ```
 
 ```{r}
-   
-   all_objects <- base::ls()
-   all_df <- all_objects[grep("_GO", all_objects)]
-   all_cluster_df <- lapply(all_df, get, envir = globalenv())
-(all_cluster_df[[3]])
-  names(all_cluster_df)[]
+Plastid_ribo_leaf_section_s <- t(Plastid_ribo_leaf_section[,1:16])
+Plastid_ribo_leaf_section_s[1:4,] <- scale(Plastid_ribo_leaf_section_s[1:4,])
+Plastid_ribo_leaf_section_s[5:8,] <- scale(Plastid_ribo_leaf_section_s[5:8,])
+Plastid_ribo_leaf_section_s[9:12,] <- scale(Plastid_ribo_leaf_section_s[9:12,])
+PHANPG_total_scaled <- scale(t(PHANPG_total_scaled))
+ 
+
+heatmap.2(as.matrix(Plastid_ribo_leaf_section[,1:12]),scale = "row", labRow = Plastid_ribo_leaf_section$Protein,Colv = NA, reorderfun=function(d,w) reorder(d,w,agglo.FUN = mean), trace = "none", density.info = "none", dendrogram = "row", colsep = c(0,4,8,12), sepcolor = "black", sepwidth = c(0.01,0.01), rowsep = c(0,84), cexCol = 0.7, key.title = "", margins = c(5,20), col = brewer.pal(9,"YlOrRd"), symkey = T, keysize = 1, lhei=c(1.5, 4.2), lwid=c(1.7,4.5), key.xlab = "scaled abundance", adjCol = c(0.8,0), srtCol = 45, offsetRow = 0, cexRow = 0.4)
+  
+ heatmap(as.matrix(Plastid_ribo_leaf_section[,1:16]), scale = "row", Colv = NA, reorderfun=function(d,w) reorder(d,w,agglo.FUN = sum),cexRow = 0.5)
+ 
+ apheatmap::pheatmap(t(PHANPG_normalized[,1:12]), scale = "column",)
+```
+#cluster HYB values
+```{r}
+normalized_HMP_outlier_fixed <- normalized_HMP[2:5]
+
+normalized_HMP_outlier_fixed <- log2(normalized_HMP_outlier_fixed)
+
+normalized_HMP_outlier_fixed[which(normalized_HMP_outlier_fixed$S1 >2 ), "S1"] <- -2
+normalized_HMP_outlier_fixed[which(normalized_HMP_outlier_fixed$S3 < -2), "S3"] <- -2
+
+normalized_HMP_outlier_fixed_mat <- as.matrix(normalized_HMP_outlier_fixed)
+normalized_HMP_outlier_fixed_mat[normalized_HMP_outlier_fixed_mat > 2] <- 2
+normalized_HMP_outlier_fixed_mat[normalized_HMP_outlier_fixed_mat < -2] <- -2
+
+rownames(normalized_HMP_outlier_fixed) <- normalized_HMP$Accession
+write.csv(normalized_HMP_outlier_fixed_mat, "normalized_HMP_no_outlier.csv", row.names = T)
+
+dist_HMP_MAN <- dist(normalized_HMP_outlier_fixed_mat, method = "manhattan")
+
+hc_MAN <- hclust(dist_HMP_MAN, method = "average")
+hc_MAN$merge
+
+heatmap.2(t(normalized_HMP_outlier_fixed), scale = "none")
+
+
+hc_MAN_cluster <- setNames(data.frame(cutree(hc_MAN, k = 10)), "Cluster")
+table(hc_MAN_cluster$Cluster)
+
+dist_HMP_EUC <- dist(normalized_HMP_outlier_fixed_mat)
+m_EUC <- as.matrix(dist_HMP_EUC)
+hc_EUC <- hclust(dist_HMP_EUC, method = "single")
+hclust(dist)
+
+#kmeans
+
+fviz_nbclust(normalized_HMP_outlier_fixed_mat, kmeans, method = "wss", k.max = 30)
+
+#clustering using Pearson correlation as matrix input
+
+cor_matrix <- cor(t(normalized_HMP_outlier_fixed_mat), t(normalized_HMP_outlier_fixed_mat))
+
+cor_matrix_spearman_filtered <- cor_matrix
+
+cor_matrix_spearman_filtered[abs(cor_matrix_pearson_filtered) < 0.4] <- 0
+
+cor_matrix_pearson <- cor(t(HMP_matrix[,1:4]), t(HMP_matrix[,1:4]))
+
+cor_matrix_pearson_filtered <- cor_matrix
+cor_matrix_pearson_filtered[abs(cor_matrix_pearson_filtered) < 0.75] <- 0
+
+mean(cor_matrix_pearson_filtered)
+
+
+
+
+
+#HMP_cluster_assign <- setNames(data.frame(cutree(hc_HMP, h = 0.5)),"Cluster")
+
+#HMP_TOM <- TOMsimilarityFromExpr(t(HMP_cluster), networkType = "signed", power = 12)
+
+dissTOM <- 1 - (cor_matrix_pearson_filtered)
+
+# hierarchical clustering
+geneTree = flashClust(as.dist(dissTOM), method = "average")
+# here we define the modules by cutting branches
+
+moduleLabelsManual_1 = cutreeDynamic(dendro = geneTree,  method = "hybrid", 
+    deepSplit = 2, pamRespectsDendro = F, minClusterSize = 30, distM = dissTOM)
+
+color_1 <- labels2colors(moduleLabelsManual_1)
+
+colors <- clust_out$Cluster
+
+merge_colors <- mergeCloseModules(t(normalized_HMP_outlier_fixed_mat), colors = color_1, cutHeight = 0.15)
+
+MEList = moduleEigengenes(t(normalized_HMP_outlier_fixed_mat), colors = colors, scale = F)
+
+MEs = MEList$eigengenes
+
+MEs <- merge_colors$newMEs
+
+plotEigengeneNetworks(MEs, "", marDendro = c(0,4,1,2), marHeatmap = c(3,4,1,2), signed = F)
+
+labeledHeatmap(cor(MEs,MEs),xLabels = names(MEs))
+
+
+ME_values <- data.frame(t(MEList$eigengenes))
+ME_values$color <- rownames(ME_values)
+rownames(ME_values) <- paste0("Cluster ",c(1:nrow(ME_values)))
+
+ME_values_plot <- data.frame(stack(ME_values[,1:4]))
+ME_values_plot$module <- rep(rownames(ME_values),4)
+#ME_values_plot$ind <- gsub("_HMP","", ME_values_plot$ind)
+ME_values_plot$color <- rep(ME_values$color,4)
+ME_values_plot$module <- factor(ME_values_plot$module, levels = c(paste0("Cluster ", 1:25)))
+
+
+#Cluster profile
+
+ggplot(ME_values_plot, aes(y = values, x = ind))+ 
+  geom_point(size = 0.8, aes(color = module))+
+  geom_line(aes(group = module, color = module), linewidth = 0.8)+
+  theme_bw()+
+  theme(panel.grid = element_blank(), axis.text= element_text(size = 8, color = "black"))+
+  #theme(axis.text.x = element_text(size = 0, color = "black", angle = 30, vjust = 0.3, hjust = 0.6), legend.position = "none", axis.ticks.x = element_blank(), axis.title.x = element_text(size = 11, color = "black", hjust = 0.65))+
+  
+ theme(legend.position = "none", axis.ticks.x = element_blank())+
+  #scale_x_discrete(expand = c(0,0)) +
+  #scale_y_continuous(expand = c(0,0)) +
+  #facet_wrap(~genotype, scales = "free_y")
+  ylab("") +
+  xlab("")+
+  #ylim(-0.7,0.7)+
+  geom_hline(yintercept = 0, color = "gray50", linetype = "dotted")+
+  facet_wrap(~module)+
+  scale_color_manual(values = c("#953941","#953941", "peachpuff", "#D2EEEA","peachpuff", "#111111","#953941","#3B809A","#111111","#3B809A","#3B809A","#111111","peachpuff","#953941","#D2EEEA" ,"#111111","#3B809A","#953941","#953941","peachpuff","#D2EEEA","peachpuff","#3B809A",  "#111111",  "#111111"))
+
+datkME <- signedKME(t(HMP_cluster), MEs)
+t(HMP_cluster)
+
+ME_values_plot$module <- gsub("Cluster", "Cluster ", ME_values_plot$module)
+```
+
+
+#clustering
+```{r}
+heatmap.2(normalized_HMP_outlier_fixed_mat, Colv = F, dendrogram = "none", trace = "none", density.info = "none", scale = "none", 
+          col = hcl.colors(13,"Tropic"), 
+         # col = c(hcl.colors(n = 10, "Blues3"), hcl.colors(n =7 , "Oranges",rev = T)[2:7]),
+          Rowv = as.dendrogram(hc_MAN),  reorderfun=function(d,w) reorder(d,w,agglo.FUN = mean), labRow = NA, key.title = "", key.xlab = "log2(HMP)", cexCol = 0.8, lwid = c(1.4,4), lhei = c(1.4,4.2), margins = c(2,5), srtCol = 0, 
+         rowsep = c(90,1836,2711,3400,3760,4248,5330,6528,6719),
+         #rowsep = c(1664,2069,3731,4277,5013,5680,6738),
+         sepwidth = c(1,1), sepcolor = "black", linecol = "black")
+
+(as.numeric(hc_MAN$order))
+as.dendrogram(hc_EUC)
+
+WGCNA_fake <- adjacency()
+diss_WGCNA <- 1- WGCNA_fake
+
+WGCNA_fake_hc <- flashClust(as.dist(diss_WGCNA), method = "average")
+as.dendrogram(WGCNA_fake_hc)
+cut_WGCNA_fake <- setNames(data.frame(cutree(WGCNA_fake_hc, h = 0.2)),"Cluster")
+table(cut_WGCNA_fake$Cluster)
+
+cut_hc_EUC <- setNames(data.frame(cutree(geneTree, h= 0.4)), "Cluster")
+table(cut_hc_EUC$Cluster)
+count_HC <- data.frame(table(cut_hc_MAN$Cluster))
+
+cut_hc_MAN$Accession <- rownames(cut_hc_MAN)
+cut_hc_MAN_ordered <- cut_hc_MAN[hc_MAN$order,]
+cut_hc_MAN_ordered$Protein <- total_tmt[match(cut_hc_MAN_ordered$Accession, total_tmt$Accession),"Protein"]
+cut_hc_MAN_ordered$Gene <- substr(cut_hc_MAN_ordered$Accession, start = 1, stop = 14)
+
+unique <- unique(cut_hc_MAN_ordered$Cluster)
+sum(count_HC[count_HC$Var1 %in% unique[1:36],"Freq"])
+39 40 27 23 19 16 20 14  5 18 35 26 29 30 11 36 33  8 22  3 24 10 21 25 31 38  7 17  6 34 32 15 37 28 13  4  2  1 12  9
+
+```
+
+#HMP cluster enrichment
+```{r}
+clust_out <- data.frame(normalized_HMP_outlier_fixed_mat)
+clust_out$Cluster <- cut_hc_EUC$Cluster
+clust_out$Gene <-substr(clust_out$Accession, start = 1, stop = 14)
+  
+write.csv(clust_out, "Pearson_filter0.75_averagelk_cluster.csv")
+Accessions <- colnames(cor_matrix)
+clust_out$Protein <- total_tmt[match(clust_out$Accession, total_tmt$Accession),"Protein"]
+clust_out$SL_GOIs <- SL_GOIs[match(clust_out$Accession, SL_GOIs$Accession),"Category"]
+
+clust_out_plot <- stack(clust_out[,1:4])
+clust_out_plot$Accession <- rep(clust_out$Accession, 4)
+clust_out_plot$Cluster <- clust_out$Cluster
+clust_out_plot_selected <- clust_out_plot[clust_out_plot$Cluster %in% c(1,2,7,18,19,8,10,11,17,23),]
+clust_out_plot_selected$Cluster <- factor(clust_out_plot_selected$Cluster, levels = c(paste0("Cluster ", c(1,2,7,18,19,8,10,11,17,23))))
+
+all_plot <- stack(cut_hc_EUC)
+all_plot$Accession <- rep(rownames(cut_hc_MAN_ordered_HMP$Accession),4)
+all_plot$colors <- rep(clust_out$Cluster,4)
+all_plot$module <- ""
+all_plot_selected <- all_plot[all_plot$Cluster == c(1:8),]
+
+for(i in 1:nrow(all_plot)){
+ all_plot[i,"module"] <- rownames(ME_values)[match(paste0("ME",all_plot[i,"colors"]),ME_values$color)]
+}
+
+
+
+##up trend 1,2,3,5,7,
+#7 - only S1 BMP, s2-s4 up
+#2 - S1/2 down S3/4 up
+#1 - sequential up
+#3 - S4 specifically up 
+#5 - S2/4
+#12 S2 specific 0.11
+#13 S1/2 dramatic up 0.3
+#14 S1/2 dramatic up 0.4
+#18 S1/2 down 0.14 S3/4 mid
+#20 sequential S2-4 0.26
+#22 mix 0.2
+#24 S2 specific 
+
+
+##down trend 4,6,8 
+#4 - S2 specific
+#6 - sequential down S1-S3
+#8 sequential down
+#9 - S3 down 0.1
+#10 sequential down 0.3
+#11 S4 specific 0.23
+#15 sequential down 0.32
+#16 sequential S2-S4 0.26
+#17 S1/S2 0.27
+
+#19 S1 specific -0.23
+#21 S2 specific -0.24
+#23 mix 0.32 S1/2
+#25 mix but strong between S2/3
+
+Cluster_1 <- clust_out[clust_out$Cluster == 1,]
+Cluster_2 <- clust_out[clust_out$Cluster == 2,]
+Cluster_3 <- clust_out[clust_out$Cluster == 3,]
+Cluster_4 <- clust_out[clust_out$Cluster == 4,]
+Cluster_5 <- clust_out[clust_out$Cluster == 5,]
+Cluster_6 <- clust_out[clust_out$Cluster == 6,]
+Cluster_7 <- clust_out[clust_out$Cluster == 7,]
+Cluster_8 <- clust_out[clust_out$Cluster == 8,]
+Cluster_9 <- clust_out[clust_out$Cluster == 9,]
+Cluster_10 <- clust_out[clust_out$Cluster == 10,]
+Cluster_11 <- clust_out[clust_out$Cluster == 11,]
+Cluster_12 <- clust_out[clust_out$Cluster == 12,]
+Cluster_13 <- clust_out[clust_out$Cluster == 13,]
+Cluster_14 <- clust_out[clust_out$Cluster == 14,]
+Cluster_15 <- clust_out[clust_out$Cluster == 15,]
+Cluster_16 <- clust_out[clust_out$Cluster == 16,]
+Cluster_17 <- clust_out[clust_out$Cluster == 17,]
+Cluster_18 <- clust_out[clust_out$Cluster == 18,]
+Cluster_19 <- clust_out[clust_out$Cluster == 19,]
+Cluster_20 <- clust_out[clust_out$Cluster == 20,]
+Cluster_21 <- clust_out[clust_out$Cluster == 21,]
+Cluster_22 <- clust_out[clust_out$Cluster == 22,]
+Cluster_23 <- clust_out[clust_out$Cluster == 23,]
+Cluster_24 <- clust_out[clust_out$Cluster == 24,]
+Cluster_25 <- clust_out[clust_out$Cluster == 25,]
+
+
+
+#up
+
+Cluster_14 <- clust_out[clust_out$Cluster == gsub("ME","",ME_values[14,"color"]),]
+Cluster_15 <- clust_out[clust_out$Cluster == gsub("ME","",ME_values[15,"color"]),]
+Cluster_17 <- clust_out[clust_out$Cluster == gsub("ME","",ME_values[17,"color"]),]
+Cluster_2 <- clust_out[clust_out$Cluster == gsub("ME","",ME_values[2,"color"]),]
+Cluster_4 <- clust_out[clust_out$Cluster == gsub("ME","",ME_values[4,"color"]),]
+Cluster_5 <- clust_out[clust_out$Cluster == gsub("ME","",ME_values[5,"color"]),]
+Cluster_6 <- clust_out[clust_out$Cluster == gsub("ME","",ME_values[6,"color"]),]
+Cluster_7 <- clust_out[clust_out$Cluster == gsub("ME","",ME_values[7,"color"]),]
+Cluster_10 <- clust_out[clust_out$Cluster == gsub("ME","",ME_values[10,"color"]),]
+Cluster_11 <- clust_out[clust_out$Cluster == gsub("ME","",ME_values[11,"color"]),]
+Cluster_13 <- clust_out[clust_out$Cluster == gsub("ME","",ME_values[13,"color"]),]
+Cluster_16 <- clust_out[clust_out$Cluster == gsub("ME","",ME_values[16,"color"]),]
+Cluster_20 <- clust_out[clust_out$Cluster == gsub("ME","",ME_values[20,"color"]),]
+Cluster_21 <- clust_out[clust_out$Cluster == gsub("ME","",ME_values[21,"color"]),]
+Cluster_22 <- clust_out[clust_out$Cluster == gsub("ME","",ME_values[22,"color"]),]
+
+ckyste
+C1_plot <- data.frame(stack(Cluster_1[,2:5]))
+C1_plot$Accession <- rep(rownames(Cluster_1),4)
+
+ggplot(clust_out_plot_selected, aes(ind, values)) +
+  geom_point(size = 0.5, alpha = 0.8, aes(color = Cluster))+
+  geom_line(aes(group = Accession, color = Cluster), linewidth = 0.1, alpha = 0.8)+
+  theme_bw()+
+  theme(panel.grid = element_blank(), axis.title.x = element_blank(), axis.ticks.x =element_blank(), legend.title = element_blank(), axis.text.y = element_text(size = 9, color = "black"), axis.text.x = element_text(color = "black", size = 10), legend.position = "none")+
+ # scale_color_manual(values = c("NE" = "#89CE91", "PE" = "#005560", "TOR" = "#E3A946", "LARP1" = "#873040"), label = c("NE plastid ribosome", "PE plastid ribosome", "TOR", "LARP1"))+
+  #ylim(-0.8,0.8)+
+  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.4, color = "beige")+
+  ylab("log2(B73xMo17/MP)") +
+ ylim(-1,1)+
+  facet_wrap(~Cluster, scales = "free_y") +
+      scale_color_manual(values = c("#953941","#953941","#953941", "#953941", "#953941", "#3B809A","#3B809A", "#3B809A", "#3B809A","#3B809A"))
+ # ylim(0,2)
+
+
+##turquoise
+Cluster_2 <- clust_out[clust_out$Cluster == gsub("ME","",ME_values[2,"color"]),]
+C2_plot <- data.frame(stack(t(Cluster_2[,1:3])))
+C2_plot$Accession <- rep(rownames(Cluster_2),3)
+
+##yellow
+Cluster_3 <- clust_out[clust_out$Cluster == gsub("ME","",ME_values[3,"color"]),]
+C3_plot <- data.frame(stack(t(Cluster_3[,1:3])))
+C3_plot$Accession <- rep(rownames(Cluster_3),3)
+
+##black
+Cluster_4 <- clust_out[clust_out$Cluster == gsub("ME","",ME_values[4,"color"]),]
+
+##blue
+Cluster_5 <- clust_out[clust_out$Cluster == gsub("ME","",ME_values[5,"color"]),]
+##magenta
+
+Cluster_6 <- clust_out[clust_out$Cluster == gsub("ME","",ME_values[6,"color"]),]
+
+##brown
+
+Cluster_7 <- clust_out[clust_out$Cluster == gsub("ME","",ME_values[7,"color"]),]
+
+##pink
+
+Cluster_8 <- clust_out[clust_out$Cluster == gsub("ME","",ME_values[8,"color"]),]
+
+Cluster_9 <-  clust_out[clust_out$Cluster == gsub("ME","",ME_values[9,"color"]),]
+
+
+Cluster_10 <-  clust_out[clust_out$Cluster == gsub("ME","",ME_values[10,"color"]),]
+
+
+Cluster_11 <-  clust_out[clust_out$Cluster == gsub("ME","",ME_values[11,"color"]),]
+
+
+Cluster_12 <-  clust_out[clust_out$Cluster == gsub("ME","",ME_values[12,"color"]),]
+
+Cluster_13 <-  HMP_matrix[rownames(HMP_matrix) %in% Accessions[which(colors == gsub("ME","",colnames(MEs)[13]))],]
+
+##TMT_cluster_6 
+TMT_cluster6_TOR_GO <- cluster_GO_enrichemnt(AHP_TMT_cluster6, gamer_cut = gamercut, nodesize = 1)
+
+TOR_HMP <- HMP_matrix[rownames(HMP_matrix) %in% TOR,]
+
+#find proteins negatively correlated to TOR HYB trend
+cor_TOR <- cor(t(HMP_matrix[5344,1:3]), t(HMP_matrix[,1:3]))
+cor_TOR$Accession <- rownames(cor_TOR)
+cor_TOR$Protein <- total_tmt[match(cor_TOR$Accession, total_tmt$Accession), "Protein"]
+
+cor_TOR_tmt <- data.frame(t(cor(t(normalized_tmt[5344,c(1,2,17,5,6,18,9,10,19)]), t(normalized_tmt[1:6828,c(1,2,17,5,6,18,9,10,19)]))))
+cor_TOR_tmt$Accession <- normalized_tmt$Accession
+cor_TOR_tmt$SL_GOIs <- SL_GOIs[match(cor_TOR_tmt$Accession, SL_GOIs$Accession),"Category"]
+
+cor_TOR_tmt_H <- data.frame(t(cor(t(normalized_tmt[5344,c(9,10,19,13,14,20)]), t(normalized_tmt[1:6828,c(9,10,19,13,14,20)]))))
+cor_TOR_tmt_H$Accession <- normalized_tmt$Accession
+cor_TOR_tmt_H$SL_GOIs <- SL_GOIs[match(cor_TOR_tmt_H$Accession, SL_GOIs$Accession),"Category"]
+
+cor_TOR <- rbind(cor_TOR,corPvalueStudent(cor_TOR[1,], nSamples = 3))
+```
+#new cluster
+```{r}
+0,1836,2711,3400,3760,4248,5330,6528,6719
+Clust_1 <- cut_hc_MAN_ordered[cut_hc_MAN_ordered$Cluster == 1,]
+Clust1_HMP <- merge.data.frame(Clust_1, normalized_HMP_outlier_fixed, by = "Accession")
+Clust1_HMP$Category <- SL_GOIs[match(Clust1_HMP$Accession, SL_GOIs$Accession),"Category"]
+
+Clust_5 <- cut_hc_MAN_ordered[cut_hc_MAN_ordered$Cluster == 5,]
+Clust5_HMP <- merge.data.frame(Clust_5, normalized_HMP_outlier_fixed, by = "Accession")
+Clust5_HMP$Category <- SL_GOIs[match(Clust5_HMP$Accession, SL_GOIs$Accession),"Category"]
+Clust2_plot <- stack(Clust2_HMP[,5:8])
+Clust2_plot$Gene <- rep(Clust2_HMP$Accession,4)
+
+Clust_2 <- cut_hc_MAN_ordered[cut_hc_MAN_ordered$Cluster == 2,]
+Clust2_HMP <- merge.data.frame(Clust_2, normalized_HMP_outlier_fixed, by = "Accession")
+Clust2_HMP$Category <- SL_GOIs[match(Clust2_HMP$Accession, SL_GOIs$Accession),"Category"]
+
+Clust_3 <- cut_hc_MAN_ordered[cut_hc_MAN_ordered$Cluster == 3,]
+Clust_3_HMP <- merge.data.frame(Clust_3, normalized_HMP_outlier_fixed, by = "Accession")
+Clust_3_HMP$Category <- SL_GOIs[match(Clust_3_HMP$Accession, SL_GOIs$Accession),"Category"]
+
+Clust_4 <- cut_hc_MAN_ordered[cut_hc_MAN_ordered$Cluster == 4,]
+Clust_4_HMP <- merge.data.frame(Clust_4, normalized_HMP_outlier_fixed, by = "Accession")
+Clust_4_HMP$Category <- SL_GOIs[match(Clust_4_HMP$Accession, SL_GOIs$Accession),"Category"]
+
+Clust_6 <- cut_hc_MAN_ordered[cut_hc_MAN_ordered$Cluster == 6,]
+Clust_6_HMP <- merge.data.frame(Clust_6, normalized_HMP_outlier_fixed, by = "Accession")
+Clust_6_HMP$Category <- SL_GOIs[match(Clust_6_HMP$Accession, SL_GOIs$Accession),"Category"]
+
+Clust_7 <- cut_hc_MAN_ordered[cut_hc_MAN_ordered$Cluster == 7,]
+Clust_7_HMP <- merge.data.frame(Clust_7, normalized_HMP_outlier_fixed, by = "Accession")
+Clust_7_HMP$Category <- SL_GOIs[match(Clust_7_HMP$Accession, SL_GOIs$Accession),"Category"]
+```
+
+
+
+#compare DE, acs/B73 and HMP
+```{r}
+normalized_HMP
+
+#add B73/Mo17
+normalized_HMP <- cbind(normalized_HMP, setNames(data.frame(cbind(
+  normalized_tmt$B73_S1/normalized_tmt$Mo17_S1, 
+  normalized_tmt$B73_S2/normalized_tmt$Mo17_S2, 
+  normalized_tmt$B73_S3/normalized_tmt$Mo17_S3,  
+  normalized_tmt$B73_S4/normalized_tmt$Mo17_S4)), c("B73Mo17_1","B73Mo17_2","B73Mo17_3","B73Mo17_4")))
+
+add acs/B73
+normalized_HMP <- cbind(normalized_HMP, setNames(data.frame(cbind(
+  normalized_tmt$acs_S1/normalized_tmt$B73_S1, 
+  normalized_tmt$acs_S2/normalized_tmt$B73_S2, 
+  normalized_tmt$acs_S3/normalized_tmt$B73_S3,  
+  normalized_tmt$acs_S4/normalized_tmt$B73_S4)), c("acsB73_1","acsB73_2","acsB73_3","acsB73_4")))
+
+colnames(normalized_HMP)[1:4] <- gsub("S", "HMP_S", colnames(normalized_HMP)[1:4])
+
+normalized_HMP_log2 <- log2(normalized_HMP)
+
+```
+##network 
+#pick soft-thresholding powers
+```{r}
+WGCNA_plot1=function(df){
+    # Choose a set of soft-thresholding powers
+    powers = c(c(4:16), seq(from = 18, to=25, by=2))
+    # Call the network topology analysis function
+    sft = WGCNA::pickSoftThreshold(df, powerVector = powers, networkType = "signed", corOptions=list(use = "p"))
+
+    #plotf
+    require(repr)
+    tiff('leaf_section_DEHMPacs_pickbeta.tiff', units = "in", width = 8, height = 6, res = 300, compression = "lzw")
+    options(repr.plot.width=9, repr.plot.height=4)
+    par(mfrow = c(1,2));
+    cex1 = 0.9;
+    plot(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+    xlab="Soft Threshold (power)",ylab="Scale Free Topology Model Fit,signed R^2",type="n",
+    main = paste("Scale independence"));
+    text(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+    labels=powers,cex=cex1,col="red");
+    # this line corresponds to using an R^2 cut-off of h
+    abline(h=0.9,col="red")
+    # Mean connectivity as a function of the soft-thresholding power
+    plot(sft$fitIndices[,1], sft$fitIndices[,5],
+    xlab="Soft Threshold (power)",ylab="Mean Connectivity", type="n",
+    main = paste("Mean connectivity"))
+    text(sft$fitIndices[,1], sft$fitIndices[,5], labels=powers, cex=cex1,col="red")
+    dev.off()
+}
+
+WGCNA_plot1(normalized_HMP_log2)
+#softpower = 10
+```
+
+```{r}
+require(WGCNA)
+#pick soft-thresholding powers
+```{r}
+WGCNA_plot1=function(df_exp){
+    # Choose a set of soft-thresholding powers
+    powers = c(c(4:16), seq(from = 18, to=25, by=2))
+    # Call the network topology analysis function
+    sft = WGCNA::pickSoftThreshold(df_exp, powerVector = powers, networkType = "signed", corOptions=list(use = "p", method = "spearman"))
+
+    #plotf
+    require(repr)
+    tiff('pick_beta_signed_Punion_bicor.tiff', units = "in", width = 8, height = 6, res = 300, compression = "lzw")
+    options(repr.plot.width=9, repr.plot.height=4)
+    par(mfrow = c(1,2));
+    cex1 = 0.9;
+    plot(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+    xlab="Soft Threshold (power)",ylab="Scale Free Topology Model Fit,signed R^2",type="n",
+    main = paste("Scale independence"));
+    text(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+    labels=powers,cex=cex1,col="red");
+    # this line corresponds to using an R^2 cut-off of h
+    abline(h=0.9,col="red")
+    # Mean connectivity as a function of the soft-thresholding power
+    plot(sft$fitIndices[,1], sft$fitIndices[,5],
+    xlab="Soft Threshold (power)",ylab="Mean Connectivity", type="n",
+    main = paste("Mean connectivity"))
+    text(sft$fitIndices[,1], sft$fitIndices[,5], labels=powers, cex=cex1,col="red")
+    dev.off()
+}
+
+WGCNA_plot1(df_exp)
+#softpower = 10
+```
+
+
 ```
 
